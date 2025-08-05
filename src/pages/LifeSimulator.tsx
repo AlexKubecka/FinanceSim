@@ -129,11 +129,15 @@ export const LifeSimulator: React.FC = () => {
 
   // Main simulation step function
   const runSimulationStep = () => {
+    let newAge = simulationProgress.currentAge;
+    let newSavings = personalData.savings;
+    
     setSimulationProgress(prev => {
       const newDate = new Date(prev.currentDate.getTime() + (365 * 24 * 60 * 60 * 1000)); // Add exactly 1 year
       const yearsElapsed = Math.floor((newDate.getTime() - prev.startDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
       const monthsElapsed = yearsElapsed * 12;
       const currentAge = personalData.age + yearsElapsed;
+      newAge = currentAge;
 
       return {
         ...prev,
@@ -160,15 +164,22 @@ export const LifeSimulator: React.FC = () => {
       
       // Update savings (simple accumulation)
       newData.savings = prev.savings + annualSavings;
+      newSavings = newData.savings;
 
       return newData;
     });
 
-    // Record historical data (simplified)
+    // Update net worth (simplified)
+    setFinancials(prev => ({
+      ...prev,
+      netWorth: newSavings
+    }));
+
+    // Record historical data with the updated values
     setHistoricalData(prev => {
       const newPoint: HistoricalDataPoint = {
-        age: simulationProgress.currentAge,
-        netWorth: personalData.savings,
+        age: newAge,
+        netWorth: newSavings,
         salary: personalData.currentSalary,
         investments: 0,
         debt: 0,
@@ -177,14 +188,8 @@ export const LifeSimulator: React.FC = () => {
       return [...prev, newPoint];
     });
 
-    // Update net worth (simplified)
-    setFinancials(prev => ({
-      ...prev,
-      netWorth: personalData.savings
-    }));
-
     // Check if simulation should end
-    if (simulationProgress.currentAge >= personalData.retirementAge) {
+    if (newAge >= personalData.retirementAge) {
       stopSimulation();
     }
   };
@@ -205,6 +210,16 @@ export const LifeSimulator: React.FC = () => {
         monthsElapsed: 0,
         daysElapsed: 0
       }));
+      
+      // Initialize historical data with the starting point
+      setHistoricalData([{
+        age: personalData.age,
+        netWorth: personalData.savings,
+        salary: personalData.currentSalary,
+        investments: 0,
+        debt: 0,
+        timestamp: new Date()
+      }]);
     }
     
     intervalRef.current = window.setInterval(() => {
@@ -1336,10 +1351,69 @@ export const LifeSimulator: React.FC = () => {
             </div>
             <p className="text-sm text-gray-500">Click to view breakdown</p>
             
-            {/* Mini Chart Placeholder */}
-            <div className="mt-4 h-16 bg-purple-50 rounded flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 text-purple-400" />
-              <span className="ml-2 text-sm text-purple-600">Chart view</span>
+            {/* Mini Line Chart */}
+            <div className="mt-4 h-16 bg-purple-50 rounded p-2">
+              {historicalData.length > 1 ? (
+                <svg width="100%" height="100%" viewBox="0 0 300 48" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="netWorthGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.1"/>
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const maxValue = Math.max(...historicalData.map(d => d.netWorth), 0);
+                    const minValue = Math.min(...historicalData.map(d => d.netWorth), 0);
+                    const range = Math.max(maxValue - minValue, 1000); // Minimum range for better scaling
+                    
+                    const points = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                      const y = 40 - ((d.netWorth - minValue) / range) * 32;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    const pathPoints = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                      const y = 40 - ((d.netWorth - minValue) / range) * 32;
+                      return `${x},${y}`;
+                    });
+                    
+                    const pathData = pathPoints.length > 1 
+                      ? `M ${pathPoints[0]} L ${pathPoints.slice(1).join(' L ')} L ${pathPoints[pathPoints.length - 1].split(',')[0]},40 L ${pathPoints[0].split(',')[0]},40 Z`
+                      : '';
+                    
+                    return (
+                      <g>
+                        {pathData && <path d={pathData} fill="url(#netWorthGradient)" />}
+                        <polyline
+                          fill="none"
+                          stroke="#8b5cf6"
+                          strokeWidth="2"
+                          points={points}
+                        />
+                        {historicalData.map((d, i) => {
+                          const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                          const y = 40 - ((d.netWorth - minValue) / range) * 32;
+                          return (
+                            <circle
+                              key={i}
+                              cx={x}
+                              cy={y}
+                              r="2"
+                              fill="#8b5cf6"
+                            />
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                </svg>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <BarChart3 className="h-6 w-6 text-purple-400" />
+                  <span className="ml-2 text-sm text-purple-600">Start simulation to see chart</span>
+                </div>
+              )}
             </div>
           </div>
 
