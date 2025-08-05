@@ -62,7 +62,7 @@ interface EconomicState {
   cumulativeInflation: number; // Total inflation since start (multiplier)
   stockMarketIndex: number; // Stock market index value (starts at 100)
   stockMarketGrowth: number; // Annual growth rate
-  economicCycle: 'expansion' | 'peak' | 'recession' | 'trough'; // Economic cycle phase
+  economicCycle: 'expansion' | 'peak' | 'recession' | 'trough' | 'depression'; // Economic cycle phase
   yearsInCurrentCycle: number; // How long in current cycle
 }
 
@@ -112,6 +112,15 @@ export const LifeSimulator: React.FC = () => {
   // Track previous year's stock market value for year-over-year growth calculation
   // Use a ref to track the current stock market value for immediate updates
   const currentStockIndexRef = useRef<number>(5000);
+  
+  // Track years in current economic cycle with a ref for immediate updates
+  const yearsInCurrentCycleRef = useRef<number>(0);
+  
+  // Track current economic cycle with a ref for immediate updates
+  const currentEconomicCycleRef = useRef<'expansion' | 'peak' | 'recession' | 'trough' | 'depression'>('expansion');
+
+  // Store original salary to reset to after inflation adjustments
+  const originalSalaryRef = useRef<number>(0);
 
   // Financial tracking
   const [financials, setFinancials] = useState({
@@ -122,6 +131,9 @@ export const LifeSimulator: React.FC = () => {
 
   // Track if simulation has ever been started
   const [hasStarted, setHasStarted] = useState(false);
+  
+  // Track if user has completed the initial setup
+  const [setupCompleted, setSetupCompleted] = useState(false);
   
   // Salary actions state
   const [salaryActionTaken, setSalaryActionTaken] = useState(false);
@@ -158,33 +170,117 @@ export const LifeSimulator: React.FC = () => {
   const simulateEconomicStep = (currentEconomic: EconomicState, previousYearIndex: number): EconomicState => {
     let newEconomic = { ...currentEconomic };
     
-    // Update years in current cycle
+    // Update years in current cycle FIRST
     newEconomic.yearsInCurrentCycle += 1;
     
-    // Economic cycle transitions (simplified business cycle)
+    // Economic cycle transitions (realistic business cycle with multiple possible paths)
+    // Note: For testing, you can temporarily reduce these durations
+    // Use the NEW years count for transition checks
     switch (currentEconomic.economicCycle) {
       case 'expansion':
-        if (currentEconomic.yearsInCurrentCycle >= 6 + Math.random() * 4) { // 6-10 years
-          newEconomic.economicCycle = 'peak';
-          newEconomic.yearsInCurrentCycle = 0;
+        // Normal: 6-10 years, Testing: 2-4 years
+        if (newEconomic.yearsInCurrentCycle >= 2 + Math.random() * 2) { // Shortened for testing
+          const transitionRoll = Math.random();
+          if (transitionRoll < 0.7) {
+            // 70% chance: Normal progression to peak
+            newEconomic.economicCycle = 'peak';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: expansion → peak');
+          } else if (transitionRoll < 0.9) {
+            // 20% chance: Extended expansion (reset cycle)
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: expansion → extended expansion');
+          } else {
+            // 10% chance: Sudden recession (economic shock)
+            newEconomic.economicCycle = 'recession';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: expansion → sudden recession');
+          }
         }
         break;
       case 'peak':
-        if (currentEconomic.yearsInCurrentCycle >= 1) {
-          newEconomic.economicCycle = 'recession';
-          newEconomic.yearsInCurrentCycle = 0;
+        if (newEconomic.yearsInCurrentCycle >= 1) {
+          const transitionRoll = Math.random();
+          if (transitionRoll < 0.55) {
+            // 55% chance: Normal progression to recession
+            newEconomic.economicCycle = 'recession';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: peak → recession');
+          } else if (transitionRoll < 0.85) {
+            // 30% chance: Back to expansion (soft landing)
+            newEconomic.economicCycle = 'expansion';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: peak → soft landing to expansion');
+          } else if (transitionRoll < 0.98) {
+            // 13% chance: Extended peak
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: peak → extended peak');
+          } else {
+            // 2% chance: Severe depression (very rare)
+            newEconomic.economicCycle = 'depression';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: peak → severe depression (rare event)');
+          }
         }
         break;
       case 'recession':
-        if (currentEconomic.yearsInCurrentCycle >= 1 + Math.random() * 2) { // 1-3 years
-          newEconomic.economicCycle = 'trough';
-          newEconomic.yearsInCurrentCycle = 0;
+        if (newEconomic.yearsInCurrentCycle >= 1 + Math.random() * 2) { // 1-3 years
+          const transitionRoll = Math.random();
+          if (transitionRoll < 0.5) {
+            // 50% chance: Normal progression to trough
+            newEconomic.economicCycle = 'trough';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: recession → trough');
+          } else if (transitionRoll < 0.8) {
+            // 30% chance: Direct recovery to expansion (V-shaped recovery)
+            newEconomic.economicCycle = 'expansion';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: recession → V-shaped recovery to expansion');
+          } else if (transitionRoll < 0.99) {
+            // 19% chance: Extended recession
+            newEconomic.yearsInCurrentCycle = Math.max(0, newEconomic.yearsInCurrentCycle - 1);
+            console.log('🔄 Economic cycle transition: recession → extended recession');
+          } else {
+            // 1% chance: Recession deepens to depression (very rare)
+            newEconomic.economicCycle = 'depression';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: recession → depression (rare deepening)');
+          }
         }
         break;
       case 'trough':
-        if (currentEconomic.yearsInCurrentCycle >= 1) {
-          newEconomic.economicCycle = 'expansion';
-          newEconomic.yearsInCurrentCycle = 0;
+        if (newEconomic.yearsInCurrentCycle >= 1) {
+          const transitionRoll = Math.random();
+          if (transitionRoll < 0.8) {
+            // 80% chance: Normal progression to expansion
+            newEconomic.economicCycle = 'expansion';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: trough → expansion');
+          } else {
+            // 20% chance: Extended trough (prolonged stagnation)
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: trough → extended trough');
+          }
+        }
+        break;
+      case 'depression':
+        if (newEconomic.yearsInCurrentCycle >= 2 + Math.random() * 3) { // 2-5 years
+          const transitionRoll = Math.random();
+          if (transitionRoll < 0.6) {
+            // 60% chance: Slow recovery to trough
+            newEconomic.economicCycle = 'trough';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: depression → trough (slow recovery)');
+          } else if (transitionRoll < 0.9) {
+            // 30% chance: Extended depression
+            newEconomic.yearsInCurrentCycle = Math.max(0, newEconomic.yearsInCurrentCycle - 1);
+            console.log('🔄 Economic cycle transition: depression → extended depression');
+          } else {
+            // 10% chance: Direct recovery to expansion (rare but possible)
+            newEconomic.economicCycle = 'expansion';
+            newEconomic.yearsInCurrentCycle = 0;
+            console.log('🔄 Economic cycle transition: depression → direct recovery to expansion');
+          }
         }
         break;
     }
@@ -199,10 +295,13 @@ export const LifeSimulator: React.FC = () => {
         newEconomic.currentInflationRate = baseInflation + (Math.random() * 0.03); // 2.5-5.5%
         break;
       case 'recession':
-        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.03)); // 0-2.5%
+        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.015)); // 1.0-2.5%
         break;
       case 'trough':
         newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.02)); // 0.5-2.5%
+        break;
+      case 'depression':
+        newEconomic.currentInflationRate = Math.max(-0.02, baseInflation - (Math.random() * 0.05)); // -2% to 2.5% (deflation possible)
         break;
     }
     
@@ -221,10 +320,13 @@ export const LifeSimulator: React.FC = () => {
         stockGrowth = 0.05 + (Math.random() * 0.10); // 5-15% (volatile)
         break;
       case 'recession':
-        stockGrowth = -0.30 + (Math.random() * 0.20); // -30% to -10% (bear market)
+        stockGrowth = -0.15 + (Math.random() * 0.10); // -15% to -5% (moderate bear market)
         break;
       case 'trough':
-        stockGrowth = -0.15 + (Math.random() * 0.20); // -15% to +5% (recovery)
+        stockGrowth = -0.10 + (Math.random() * 0.15); // -10% to +5% (recovery)
+        break;
+      case 'depression':
+        stockGrowth = -0.40 + (Math.random() * 0.15); // -40% to -25% (severe bear market)
         break;
     }
     
@@ -240,7 +342,14 @@ export const LifeSimulator: React.FC = () => {
       ? (newStockMarketIndex - previousYearIndex) / previousYearIndex
       : actualGrowthRate;
     
-    // Debug logging for stock market calculation
+    // Debug logging for economic cycle and stock market calculation
+    console.log('Economic Cycle Debug:', {
+      previousCycle: currentEconomic.economicCycle,
+      newCycle: newEconomic.economicCycle,
+      yearsInCycle: newEconomic.yearsInCurrentCycle,
+      transitionTriggered: currentEconomic.economicCycle !== newEconomic.economicCycle
+    });
+    
     console.log('Stock Market Debug:', {
       previousYearIndex,
       currentStockIndex: currentEconomic.stockMarketIndex,
@@ -264,18 +373,22 @@ export const LifeSimulator: React.FC = () => {
     // Use the current ref value as the previous year for YoY calculation
     const previousYearValue = currentStockIndexRef.current;
     
-    // Create updated economic state with current stock market index
+    // Create updated economic state with current stock market index AND years in cycle AND economic cycle
     const currentEconomicState = {
       ...economicState,
-      stockMarketIndex: currentStockIndexRef.current
+      stockMarketIndex: currentStockIndexRef.current,
+      yearsInCurrentCycle: yearsInCurrentCycleRef.current,
+      economicCycle: currentEconomicCycleRef.current
     };
     
     // Use the tracked previous year stock index for YoY calculation
     const newEconomicState = simulateEconomicStep(currentEconomicState, previousYearValue);
     setEconomicState(newEconomicState);
     
-    // Update both the ref (for immediate access)
+    // Update all refs (for immediate access)
     currentStockIndexRef.current = newEconomicState.stockMarketIndex;
+    yearsInCurrentCycleRef.current = newEconomicState.yearsInCurrentCycle;
+    currentEconomicCycleRef.current = newEconomicState.economicCycle;
     
     setSimulationProgress(prev => {
       const newDate = new Date(prev.currentDate.getTime() + (365 * 24 * 60 * 60 * 1000)); // Add exactly 1 year
@@ -426,6 +539,10 @@ export const LifeSimulator: React.FC = () => {
     // Only reset simulation progress if this is the very first start
     if (!hasStarted) {
       setHasStarted(true);
+      
+      // Store the original salary value before any inflation adjustments
+      originalSalaryRef.current = personalData.currentSalary;
+      
       setSimulationProgress(prev => ({
         ...prev,
         startDate: new Date(),
@@ -473,14 +590,22 @@ export const LifeSimulator: React.FC = () => {
   // Career action functions
   const handlePromotion = () => {
     const salaryIncrease = 0.15; // 15% increase
+    const newSalary = personalData.currentSalary * (1 + salaryIncrease);
+    
     setPersonalData(prev => ({
       ...prev,
-      currentSalary: prev.currentSalary * (1 + salaryIncrease)
+      currentSalary: newSalary
     }));
     setFinancials(prev => ({
       ...prev,
-      currentSalary: prev.currentSalary * (1 + salaryIncrease)
+      currentSalary: newSalary
     }));
+    
+    // Update original salary reference if this is a permanent change
+    if (hasStarted) {
+      originalSalaryRef.current = newSalary;
+    }
+    
     setSalaryActionTaken(true);
     
     // Add to events
@@ -497,14 +622,22 @@ export const LifeSimulator: React.FC = () => {
 
   const handleDemotion = () => {
     const salaryDecrease = 0.10; // 10% decrease
+    const newSalary = personalData.currentSalary * (1 - salaryDecrease);
+    
     setPersonalData(prev => ({
       ...prev,
-      currentSalary: prev.currentSalary * (1 - salaryDecrease)
+      currentSalary: newSalary
     }));
     setFinancials(prev => ({
       ...prev,
-      currentSalary: prev.currentSalary * (1 - salaryDecrease)
+      currentSalary: newSalary
     }));
+    
+    // Update original salary reference if this is a permanent change
+    if (hasStarted) {
+      originalSalaryRef.current = newSalary;
+    }
+    
     setSalaryActionTaken(true);
     
     // Add to events
@@ -528,6 +661,12 @@ export const LifeSimulator: React.FC = () => {
       ...prev,
       currentSalary: 0
     }));
+    
+    // Update original salary reference if this is a permanent change
+    if (hasStarted) {
+      originalSalaryRef.current = 0;
+    }
+    
     setSalaryActionTaken(true);
     
     // Add to events
@@ -554,6 +693,12 @@ export const LifeSimulator: React.FC = () => {
         ...prev,
         currentSalary: salary
       }));
+      
+      // Update original salary reference if this is a permanent change
+      if (hasStarted) {
+        originalSalaryRef.current = salary;
+      }
+      
       setSalaryActionTaken(true);
       
       // Add to events
@@ -583,6 +728,7 @@ export const LifeSimulator: React.FC = () => {
     });
     setHistoricalData([]);
     setHasStarted(false);
+    setSetupCompleted(false);
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
@@ -596,23 +742,44 @@ export const LifeSimulator: React.FC = () => {
       yearsInCurrentCycle: 0
     });
     
-    // Reset previous year stock index
+    // Reset all refs
     currentStockIndexRef.current = 5000;
+    yearsInCurrentCycleRef.current = 0;
+    currentEconomicCycleRef.current = 'expansion';
     
     // Reset inflation-adjusted cost data
     setInflationAdjustedRentData({});
     setInflationAdjustedGroceryData({});
     
-    // Reset savings to 0
-    setPersonalData(prev => ({
-      ...prev,
-      savings: 0
-    }));
-    
-    setFinancials(prev => ({
-      ...prev,
-      netWorth: 0
-    }));
+    // Reset salary back to original value (before inflation adjustments)
+    if (originalSalaryRef.current > 0) {
+      setPersonalData(prev => ({
+        ...prev,
+        savings: 0,
+        currentSalary: originalSalaryRef.current
+      }));
+      
+      // Recalculate annual expenses without inflation adjustments
+      const originalAnnualExpenses = calculateAnnualExpenses();
+      
+      setFinancials(prev => ({
+        ...prev,
+        netWorth: 0,
+        currentSalary: originalSalaryRef.current,
+        annualExpenses: originalAnnualExpenses
+      }));
+    } else {
+      // Reset savings to 0
+      setPersonalData(prev => ({
+        ...prev,
+        savings: 0
+      }));
+      
+      setFinancials(prev => ({
+        ...prev,
+        netWorth: 0
+      }));
+    }
   };
 
   // Cleanup interval on unmount
@@ -1193,7 +1360,14 @@ export const LifeSimulator: React.FC = () => {
                 <input
                   type="number"
                   value={personalData.currentSalary || ''}
-                  onChange={(e) => setPersonalData(prev => ({ ...prev, currentSalary: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => {
+                    const newSalary = parseInt(e.target.value) || 0;
+                    setPersonalData(prev => ({ ...prev, currentSalary: newSalary }));
+                    // Update original salary reference if simulation hasn't started
+                    if (!hasStarted) {
+                      originalSalaryRef.current = newSalary;
+                    }
+                  }}
                   placeholder="Enter annual salary"
                   className="p-3 border border-gray-300 rounded-lg"
                   min="0"
@@ -1384,14 +1558,17 @@ export const LifeSimulator: React.FC = () => {
   const renderPersonalMode = () => {
     const taxInfo = calculateTaxes(financials.currentSalary, personalData.state);
 
-    // If basic info not complete, show setup screen
-    if (!personalData.age || !personalData.currentSalary || !personalData.state) {
+    // If basic info not complete OR user hasn't clicked continue, show setup screen
+    if (!personalData.age || !personalData.currentSalary || !personalData.state || !setupCompleted) {
       return (
         <div className="space-y-8">
           {/* Header */}
           <div className="flex items-center mb-6">
             <button
-              onClick={() => setCurrentMode('selection')}
+              onClick={() => {
+                setSetupCompleted(false);
+                setCurrentMode('selection');
+              }}
               className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
             >
               ← Back to Selection
@@ -1427,6 +1604,8 @@ export const LifeSimulator: React.FC = () => {
                     const salary = parseInt(e.target.value) || 0;
                     setPersonalData(prev => ({ ...prev, currentSalary: salary }));
                     setFinancials(prev => ({ ...prev, currentSalary: salary }));
+                    // Update original salary reference since simulation hasn't started yet
+                    originalSalaryRef.current = salary;
                   }}
                   placeholder="Enter your annual salary"
                   className="w-full p-3 border border-gray-300 rounded-lg text-lg"
@@ -1448,18 +1627,31 @@ export const LifeSimulator: React.FC = () => {
                 </select>
               </div>
 
-              <button
-                onClick={() => {
-                  // Basic validation
-                  if (personalData.age && personalData.currentSalary && personalData.state) {
-                    // Setup is complete, this will trigger the dashboard view
-                  }
-                }}
-                disabled={!personalData.age || !personalData.currentSalary || !personalData.state}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
-              >
-                Continue to Dashboard
-              </button>
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setPersonalData(prev => ({ ...prev, age: 0, currentSalary: 0, state: '' }));
+                    setFinancials(prev => ({ ...prev, currentSalary: 0 }));
+                    originalSalaryRef.current = 0;
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors text-lg font-semibold"
+                >
+                  Clear Form
+                </button>
+                
+                <button
+                  onClick={() => {
+                    // Basic validation and setup completion
+                    if (personalData.age && personalData.currentSalary && personalData.state) {
+                      setSetupCompleted(true);
+                    }
+                  }}
+                  disabled={!personalData.age || !personalData.currentSalary || !personalData.state}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
+                >
+                  Continue to Dashboard
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1473,7 +1665,10 @@ export const LifeSimulator: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <button
-              onClick={() => setCurrentMode('selection')}
+              onClick={() => {
+                setSetupCompleted(false);
+                setCurrentMode('selection');
+              }}
               className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
             >
               ← Back to Selection
