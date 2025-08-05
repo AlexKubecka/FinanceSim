@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Square, BarChart3, TrendingUp, DollarSign, User, Target, Receipt, Globe, RotateCcw } from 'lucide-react';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'economy';
 
 interface PersonalFinancialData {
   // Basic Info
@@ -53,6 +53,17 @@ interface HistoricalDataPoint {
   investments: number;
   debt: number;
   timestamp: Date;
+  inflation: number;
+  stockMarketValue: number;
+}
+
+interface EconomicState {
+  currentInflationRate: number; // Annual inflation rate (e.g., 0.03 for 3%)
+  cumulativeInflation: number; // Total inflation since start (multiplier)
+  stockMarketIndex: number; // Stock market index value (starts at 100)
+  stockMarketGrowth: number; // Annual growth rate
+  economicCycle: 'expansion' | 'peak' | 'recession' | 'trough'; // Economic cycle phase
+  yearsInCurrentCycle: number; // How long in current cycle
 }
 
 export const LifeSimulator: React.FC = () => {
@@ -86,9 +97,21 @@ export const LifeSimulator: React.FC = () => {
   });
 
   // Chart state
-  const [showDetailChart, setShowDetailChart] = useState<string | null>(null);
-  const [chartTimeRange, setChartTimeRange] = useState<string>('all');
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+
+  // Economic state
+  const [economicState, setEconomicState] = useState<EconomicState>({
+    currentInflationRate: 0.025, // Start with 2.5% inflation
+    cumulativeInflation: 1.0, // No inflation yet
+    stockMarketIndex: 5000, // Start at S&P 500-like level
+    stockMarketGrowth: 0.10, // 10% average annual growth (including dividends)
+    economicCycle: 'expansion',
+    yearsInCurrentCycle: 0
+  });
+
+  // Track previous year's stock market value for year-over-year growth calculation
+  // Use a ref to track the current stock market value for immediate updates
+  const currentStockIndexRef = useRef<number>(5000);
 
   // Financial tracking
   const [financials, setFinancials] = useState({
@@ -117,6 +140,10 @@ export const LifeSimulator: React.FC = () => {
   // User's custom grocery data
   const [userGroceryData, setUserGroceryData] = useState<{ [key: string]: number }>({});
   
+  // Inflation-adjusted base costs (starts with state averages, then gets adjusted each year)
+  const [inflationAdjustedRentData, setInflationAdjustedRentData] = useState<{ [key: string]: number }>({});
+  const [inflationAdjustedGroceryData, setInflationAdjustedGroceryData] = useState<{ [key: string]: number }>({});
+  
   // Rent editing state
   const [editingRent, setEditingRent] = useState(false);
   const [tempRentValue, setTempRentValue] = useState<string>('');
@@ -127,10 +154,128 @@ export const LifeSimulator: React.FC = () => {
 
   const intervalRef = useRef<number | null>(null);
 
+  // Economic simulation function
+  const simulateEconomicStep = (currentEconomic: EconomicState, previousYearIndex: number): EconomicState => {
+    let newEconomic = { ...currentEconomic };
+    
+    // Update years in current cycle
+    newEconomic.yearsInCurrentCycle += 1;
+    
+    // Economic cycle transitions (simplified business cycle)
+    switch (currentEconomic.economicCycle) {
+      case 'expansion':
+        if (currentEconomic.yearsInCurrentCycle >= 6 + Math.random() * 4) { // 6-10 years
+          newEconomic.economicCycle = 'peak';
+          newEconomic.yearsInCurrentCycle = 0;
+        }
+        break;
+      case 'peak':
+        if (currentEconomic.yearsInCurrentCycle >= 1) {
+          newEconomic.economicCycle = 'recession';
+          newEconomic.yearsInCurrentCycle = 0;
+        }
+        break;
+      case 'recession':
+        if (currentEconomic.yearsInCurrentCycle >= 1 + Math.random() * 2) { // 1-3 years
+          newEconomic.economicCycle = 'trough';
+          newEconomic.yearsInCurrentCycle = 0;
+        }
+        break;
+      case 'trough':
+        if (currentEconomic.yearsInCurrentCycle >= 1) {
+          newEconomic.economicCycle = 'expansion';
+          newEconomic.yearsInCurrentCycle = 0;
+        }
+        break;
+    }
+    
+    // Calculate inflation based on economic cycle
+    let baseInflation = 0.025; // 2.5% base
+    switch (newEconomic.economicCycle) {
+      case 'expansion':
+        newEconomic.currentInflationRate = baseInflation + (Math.random() * 0.02); // 2.5-4.5%
+        break;
+      case 'peak':
+        newEconomic.currentInflationRate = baseInflation + (Math.random() * 0.03); // 2.5-5.5%
+        break;
+      case 'recession':
+        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.03)); // 0-2.5%
+        break;
+      case 'trough':
+        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.02)); // 0.5-2.5%
+        break;
+    }
+    
+    // Update cumulative inflation
+    newEconomic.cumulativeInflation *= (1 + newEconomic.currentInflationRate);
+    
+    // Calculate stock market growth based on economic cycle (S&P 500 equivalent)
+    let stockGrowth = 0.10; // 10% base annual growth (including dividends)
+    let volatility = 0.20; // 20% volatility (more realistic for stocks)
+    
+    switch (newEconomic.economicCycle) {
+      case 'expansion':
+        stockGrowth = 0.12 + (Math.random() * 0.08); // 12-20% (bull market)
+        break;
+      case 'peak':
+        stockGrowth = 0.05 + (Math.random() * 0.10); // 5-15% (volatile)
+        break;
+      case 'recession':
+        stockGrowth = -0.30 + (Math.random() * 0.20); // -30% to -10% (bear market)
+        break;
+      case 'trough':
+        stockGrowth = -0.15 + (Math.random() * 0.20); // -15% to +5% (recovery)
+        break;
+    }
+    
+    // Add some random volatility (monthly variations averaged over the year)
+    const randomFactor = (Math.random() - 0.5) * volatility;
+    const actualGrowthRate = stockGrowth + randomFactor;
+    
+    // Calculate the new stock market index value
+    const newStockMarketIndex = currentEconomic.stockMarketIndex * (1 + actualGrowthRate);
+    
+    // Calculate year-over-year growth based on previous year's index
+    newEconomic.stockMarketGrowth = previousYearIndex > 0 
+      ? (newStockMarketIndex - previousYearIndex) / previousYearIndex
+      : actualGrowthRate;
+    
+    // Debug logging for stock market calculation
+    console.log('Stock Market Debug:', {
+      previousYearIndex,
+      currentStockIndex: currentEconomic.stockMarketIndex,
+      newStockMarketIndex,
+      actualGrowthRate,
+      calculatedYoYGrowth: newEconomic.stockMarketGrowth,
+      economicCycle: newEconomic.economicCycle
+    });
+    
+    // Update stock market index
+    newEconomic.stockMarketIndex = newStockMarketIndex;
+    
+    return newEconomic;
+  };
+
   // Main simulation step function
   const runSimulationStep = () => {
     let newAge = simulationProgress.currentAge;
     let newSavings = personalData.savings;
+    
+    // Use the current ref value as the previous year for YoY calculation
+    const previousYearValue = currentStockIndexRef.current;
+    
+    // Create updated economic state with current stock market index
+    const currentEconomicState = {
+      ...economicState,
+      stockMarketIndex: currentStockIndexRef.current
+    };
+    
+    // Use the tracked previous year stock index for YoY calculation
+    const newEconomicState = simulateEconomicStep(currentEconomicState, previousYearValue);
+    setEconomicState(newEconomicState);
+    
+    // Update both the ref (for immediate access)
+    currentStockIndexRef.current = newEconomicState.stockMarketIndex;
     
     setSimulationProgress(prev => {
       const newDate = new Date(prev.currentDate.getTime() + (365 * 24 * 60 * 60 * 1000)); // Add exactly 1 year
@@ -149,18 +294,26 @@ export const LifeSimulator: React.FC = () => {
       };
     });
 
-    // Update financials
+    // Update financials with inflation effects
     setPersonalData(prev => {
       let newData = { ...prev };
       
-      // Annual salary (after taxes, simplified)
-      const annualSalaryAfterTax = prev.currentSalary * 0.75; // Rough after-tax
+      // Adjust salary for inflation (salary typically keeps up partially with inflation)
+      const salaryInflationAdjustment = 1 + (newEconomicState.currentInflationRate * 0.8); // 80% inflation adjustment
+      newData.currentSalary = prev.currentSalary * salaryInflationAdjustment;
       
-      // Annual expenses
-      const annualExpenses = financials.annualExpenses;
+      // Calculate actual after-tax income using our tax calculation function
+      const taxInfo = calculateTaxes(newData.currentSalary, personalData.state);
+      const annualSalaryAfterTax = taxInfo.afterTaxIncome;
+      
+      // Apply inflation to housing and grocery costs specifically
+      const currentInflationRate = newEconomicState.currentInflationRate;
+      
+      // Annual expenses (affected by inflation)
+      const inflationAdjustedExpenses = financials.annualExpenses * (1 + currentInflationRate);
       
       // Annual savings (just track the difference)
-      const annualSavings = annualSalaryAfterTax - annualExpenses;
+      const annualSavings = annualSalaryAfterTax - inflationAdjustedExpenses;
       
       // Update savings (simple accumulation)
       newData.savings = prev.savings + annualSavings;
@@ -169,10 +322,80 @@ export const LifeSimulator: React.FC = () => {
       return newData;
     });
 
+    // Apply inflation to housing and grocery costs
+    setUserRentData(prev => {
+      if (!personalData.state) return prev;
+      
+      const newRentData = { ...prev };
+      const currentInflationRate = newEconomicState.currentInflationRate;
+      
+      // If user has custom rent data for their state, apply inflation to it
+      if (prev[personalData.state]) {
+        newRentData[personalData.state] = prev[personalData.state] * (1 + currentInflationRate);
+      }
+      
+      return newRentData;
+    });
+
+    setUserGroceryData(prev => {
+      if (!personalData.state) return prev;
+      
+      const newGroceryData = { ...prev };
+      const currentInflationRate = newEconomicState.currentInflationRate;
+      
+      // If user has custom grocery data for their state, apply inflation to it
+      if (prev[personalData.state]) {
+        newGroceryData[personalData.state] = prev[personalData.state] * (1 + currentInflationRate);
+      }
+      
+      return newGroceryData;
+    });
+
+    // Apply inflation to base state costs (affects all states, representing regional inflation)
+    setInflationAdjustedRentData(prev => {
+      const newRentData = { ...prev };
+      const currentInflationRate = newEconomicState.currentInflationRate;
+      
+      // If this is the first simulation step, initialize with current state data
+      if (Object.keys(prev).length === 0) {
+        Object.keys(stateRentData).forEach(state => {
+          newRentData[state] = stateRentData[state];
+        });
+      } else {
+        // Apply inflation to all state costs
+        Object.keys(prev).forEach(state => {
+          newRentData[state] = prev[state] * (1 + currentInflationRate);
+        });
+      }
+      
+      return newRentData;
+    });
+
+    setInflationAdjustedGroceryData(prev => {
+      const newGroceryData = { ...prev };
+      const currentInflationRate = newEconomicState.currentInflationRate;
+      
+      // If this is the first simulation step, initialize with current state data
+      if (Object.keys(prev).length === 0) {
+        Object.keys(stateGroceryData).forEach(state => {
+          newGroceryData[state] = stateGroceryData[state];
+        });
+      } else {
+        // Apply inflation to all state costs
+        Object.keys(prev).forEach(state => {
+          newGroceryData[state] = prev[state] * (1 + currentInflationRate);
+        });
+      }
+      
+      return newGroceryData;
+    });
+
     // Update net worth (simplified)
     setFinancials(prev => ({
       ...prev,
-      netWorth: newSavings
+      netWorth: newSavings,
+      currentSalary: personalData.currentSalary,
+      annualExpenses: prev.annualExpenses * (1 + newEconomicState.currentInflationRate) // Update expenses for inflation
     }));
 
     // Record historical data with the updated values
@@ -183,7 +406,9 @@ export const LifeSimulator: React.FC = () => {
         salary: personalData.currentSalary,
         investments: 0,
         debt: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        inflation: newEconomicState.currentInflationRate,
+        stockMarketValue: newEconomicState.stockMarketIndex
       };
       return [...prev, newPoint];
     });
@@ -218,7 +443,9 @@ export const LifeSimulator: React.FC = () => {
         salary: personalData.currentSalary,
         investments: 0,
         debt: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        inflation: economicState.currentInflationRate,
+        stockMarketValue: economicState.stockMarketIndex
       }]);
     }
     
@@ -359,6 +586,23 @@ export const LifeSimulator: React.FC = () => {
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
+    // Reset economic state
+    setEconomicState({
+      currentInflationRate: 0.025,
+      cumulativeInflation: 1.0,
+      stockMarketIndex: 5000,
+      stockMarketGrowth: 0.10,
+      economicCycle: 'expansion',
+      yearsInCurrentCycle: 0
+    });
+    
+    // Reset previous year stock index
+    currentStockIndexRef.current = 5000;
+    
+    // Reset inflation-adjusted cost data
+    setInflationAdjustedRentData({});
+    setInflationAdjustedGroceryData({});
+    
     // Reset savings to 0
     setPersonalData(prev => ({
       ...prev,
@@ -492,7 +736,18 @@ export const LifeSimulator: React.FC = () => {
 
   // Rent management functions
   const getCurrentRent = (state: string): number => {
-    return userRentData[state] ?? stateRentData[state] ?? 0;
+    // If user has custom rent data, use that (already inflation-adjusted during simulation)
+    if (userRentData[state]) {
+      return userRentData[state];
+    }
+    
+    // If simulation is running and we have inflation-adjusted data, use that
+    if (hasStarted && inflationAdjustedRentData[state]) {
+      return inflationAdjustedRentData[state];
+    }
+    
+    // Otherwise use the original state data
+    return stateRentData[state] ?? 0;
   };
 
   const handleEditRent = () => {
@@ -533,7 +788,18 @@ export const LifeSimulator: React.FC = () => {
 
   // Grocery management functions
   const getCurrentGrocery = (state: string): number => {
-    return userGroceryData[state] ?? stateGroceryData[state] ?? 0;
+    // If user has custom grocery data, use that (already inflation-adjusted during simulation)
+    if (userGroceryData[state]) {
+      return userGroceryData[state];
+    }
+    
+    // If simulation is running and we have inflation-adjusted data, use that
+    if (hasStarted && inflationAdjustedGroceryData[state]) {
+      return inflationAdjustedGroceryData[state];
+    }
+    
+    // Otherwise use the original state data
+    return stateGroceryData[state] ?? 0;
   };
 
   const handleEditGrocery = () => {
@@ -678,7 +944,7 @@ export const LifeSimulator: React.FC = () => {
       currentSalary: personalData.currentSalary,
       annualExpenses: annualExpenses
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData]);
+  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -1333,7 +1599,7 @@ export const LifeSimulator: React.FC = () => {
         )}
 
         {/* Main Dashboard Cards */}
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="grid md:grid-cols-4 gap-6">
           {/* Net Worth Card */}
           <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
                onClick={() => alert('Net Worth details coming soon!')}>
@@ -1464,6 +1730,107 @@ export const LifeSimulator: React.FC = () => {
               <span className="ml-2 text-sm text-orange-600">Expense breakdown</span>
             </div>
           </div>
+
+          {/* Economic Dashboard Card */}
+          <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
+               onClick={() => setCurrentMode('economy')}>
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                <Globe className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Economy & Markets</h3>
+                <p className="text-sm text-gray-600 capitalize">{economicState.economicCycle} cycle</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-3">
+              <div>
+                <p className="text-sm text-gray-600">Inflation</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {(economicState.currentInflationRate * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">S&P 500</p>
+                <p className="text-lg font-bold text-green-600">
+                  {economicState.stockMarketIndex.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                {historicalData.length > 1 && (
+                  <p className={`text-xs font-medium ${
+                    economicState.stockMarketGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {economicState.stockMarketGrowth >= 0 ? '+' : ''}{(economicState.stockMarketGrowth * 100).toFixed(1)}% YTD
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">Market performance this year</p>
+            
+            {/* Mini S&P 500 Chart */}
+            <div className="mt-4 h-16 bg-blue-50 rounded p-2">
+              {historicalData.length > 1 ? (
+                <svg width="100%" height="100%" viewBox="0 0 300 48" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="stockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.1"/>
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const maxValue = Math.max(...historicalData.map(d => d.stockMarketValue), 5000);
+                    const minValue = Math.min(...historicalData.map(d => d.stockMarketValue), 4000);
+                    const range = Math.max(maxValue - minValue, 1000);
+                    
+                    const points = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                      const y = 40 - ((d.stockMarketValue - minValue) / range) * 32;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    const pathPoints = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                      const y = 40 - ((d.stockMarketValue - minValue) / range) * 32;
+                      return `${x},${y}`;
+                    });
+                    
+                    const pathData = pathPoints.length > 1 
+                      ? `M ${pathPoints[0]} L ${pathPoints.slice(1).join(' L ')} L ${pathPoints[pathPoints.length - 1].split(',')[0]},40 L ${pathPoints[0].split(',')[0]},40 Z`
+                      : '';
+                    
+                    return (
+                      <g>
+                        {pathData && <path d={pathData} fill="url(#stockGradient)" />}
+                        <polyline
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="2"
+                          points={points}
+                        />
+                        {historicalData.map((d, i) => {
+                          const x = (i / Math.max(historicalData.length - 1, 1)) * 280 + 10;
+                          const y = 40 - ((d.stockMarketValue - minValue) / range) * 32;
+                          return (
+                            <circle
+                              key={i}
+                              cx={x}
+                              cy={y}
+                              r="1.5"
+                              fill="#10b981"
+                            />
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                </svg>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <Globe className="h-6 w-6 text-green-400" />
+                  <span className="ml-2 text-sm text-green-600">S&P 500 chart</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Quick Financial Summary */}
@@ -1475,18 +1842,18 @@ export const LifeSimulator: React.FC = () => {
               <p className="text-2xl font-bold text-blue-600">${taxInfo.afterTaxIncome.toLocaleString()}</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">Monthly Net Income</p>
-              <p className="text-2xl font-bold text-green-600">${(taxInfo.afterTaxIncome / 12).toLocaleString()}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-1">Monthly Expenses</p>
-              <p className="text-2xl font-bold text-orange-600">${(financials.annualExpenses / 12).toLocaleString()}</p>
-            </div>
-            <div className="text-center">
               <p className="text-sm text-gray-600 mb-1">Monthly Surplus</p>
               <p className={`text-2xl font-bold ${((taxInfo.afterTaxIncome - financials.annualExpenses) / 12) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
                 ${(((taxInfo.afterTaxIncome - financials.annualExpenses) / 12)).toLocaleString()}
               </p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">Economic Cycle</p>
+              <p className="text-2xl font-bold text-blue-600 capitalize">{economicState.economicCycle}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">Current Inflation</p>
+              <p className="text-2xl font-bold text-orange-600">{(economicState.currentInflationRate * 100).toFixed(1)}%</p>
             </div>
           </div>
         </div>
@@ -1771,6 +2138,328 @@ export const LifeSimulator: React.FC = () => {
     );
   };
 
+  const renderEconomyPage = () => {
+    return (
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex items-center mb-6">
+          <button
+            onClick={() => setCurrentMode('personal')}
+            className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
+          >
+            ← Back to Dashboard
+          </button>
+          <Globe className="h-8 w-8 text-blue-600 mr-3" />
+          <h1 className="text-3xl font-bold text-gray-800">Economy & Markets</h1>
+        </div>
+
+        {/* Current Economic Overview */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-6">Current Economic Conditions</h2>
+          
+          <div className="grid md:grid-cols-4 gap-6">
+            {/* Economic Cycle */}
+            <div className="bg-blue-50 p-4 rounded-lg text-center">
+              <h3 className="font-semibold text-blue-800 mb-2">Economic Cycle</h3>
+              <p className="text-2xl font-bold text-blue-900 capitalize mb-1">{economicState.economicCycle}</p>
+              <p className="text-sm text-blue-700">
+                Year {economicState.yearsInCurrentCycle} of cycle
+              </p>
+            </div>
+
+            {/* Inflation Rate */}
+            <div className="bg-red-50 p-4 rounded-lg text-center">
+              <h3 className="font-semibold text-red-800 mb-2">Inflation Rate</h3>
+              <p className="text-2xl font-bold text-red-900">
+                {(economicState.currentInflationRate * 100).toFixed(1)}%
+              </p>
+              <p className="text-sm text-red-700">Annual rate</p>
+            </div>
+
+            {/* S&P 500 Index */}
+            <div className="bg-green-50 p-4 rounded-lg text-center">
+              <h3 className="font-semibold text-green-800 mb-2">S&P 500</h3>
+              <p className="text-2xl font-bold text-green-900">
+                {economicState.stockMarketIndex.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              {historicalData.length > 1 && (
+                <p className={`text-sm font-medium ${
+                  economicState.stockMarketGrowth >= 0 ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {economicState.stockMarketGrowth >= 0 ? '+' : ''}{(economicState.stockMarketGrowth * 100).toFixed(1)}% YoY
+                </p>
+              )}
+            </div>
+
+            {/* Cumulative Inflation */}
+            <div className="bg-purple-50 p-4 rounded-lg text-center">
+              <h3 className="font-semibold text-purple-800 mb-2">Total Inflation</h3>
+              <p className="text-2xl font-bold text-purple-900">
+                {((economicState.cumulativeInflation - 1) * 100).toFixed(1)}%
+              </p>
+              <p className="text-sm text-purple-700">Since simulation start</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Economic Cycle Explanation */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Economic Cycle: {economicState.economicCycle}</h2>
+          
+          <div className="bg-gray-50 p-4 rounded-lg">
+            {economicState.economicCycle === 'expansion' && (
+              <div>
+                <h3 className="font-semibold text-blue-800 mb-2">🔥 Expansion Phase</h3>
+                <p className="text-gray-700 mb-2">
+                  The economy is growing! GDP is increasing, unemployment is falling, and business confidence is high.
+                </p>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                  <li>Stock market typically performs well (12-20% annual returns)</li>
+                  <li>Inflation may start to rise as demand increases</li>
+                  <li>Companies are hiring and expanding</li>
+                  <li>Consumer spending is strong</li>
+                </ul>
+              </div>
+            )}
+            
+            {economicState.economicCycle === 'peak' && (
+              <div>
+                <h3 className="font-semibold text-orange-800 mb-2">⚠️ Peak Phase</h3>
+                <p className="text-gray-700 mb-2">
+                  The economy has reached its maximum capacity. Growth is slowing and inflation is rising.
+                </p>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                  <li>Stock market becomes volatile (5-15% returns)</li>
+                  <li>Inflation peaks, potentially above 5%</li>
+                  <li>Interest rates may rise to control inflation</li>
+                  <li>Economic indicators show warning signs</li>
+                </ul>
+              </div>
+            )}
+            
+            {economicState.economicCycle === 'recession' && (
+              <div>
+                <h3 className="font-semibold text-red-800 mb-2">📉 Recession Phase</h3>
+                <p className="text-gray-700 mb-2">
+                  Economic activity is declining. GDP is shrinking and unemployment is rising.
+                </p>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                  <li>Stock market performs poorly (-30% to -10% returns)</li>
+                  <li>Inflation drops as demand decreases</li>
+                  <li>Companies reduce hiring and may lay off workers</li>
+                  <li>Consumer spending declines</li>
+                </ul>
+              </div>
+            )}
+            
+            {economicState.economicCycle === 'trough' && (
+              <div>
+                <h3 className="font-semibold text-green-800 mb-2">🌱 Trough/Recovery Phase</h3>
+                <p className="text-gray-700 mb-2">
+                  The economy has hit bottom and is beginning to recover. This is often a good time for investments.
+                </p>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                  <li>Stock market begins recovery (-15% to +5% returns)</li>
+                  <li>Inflation remains low</li>
+                  <li>Interest rates are typically low</li>
+                  <li>Early signs of economic improvement appear</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Historical Charts */}
+        {historicalData.length > 1 && (
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* S&P 500 Chart */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">S&P 500 Performance</h3>
+              <div className="h-64 bg-green-50 rounded p-4">
+                <svg width="100%" height="100%" viewBox="0 0 400 200" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="stockGradientLarge" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.1"/>
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const maxValue = Math.max(...historicalData.map(d => d.stockMarketValue));
+                    const minValue = Math.min(...historicalData.map(d => d.stockMarketValue));
+                    const range = Math.max(maxValue - minValue, 100);
+                    
+                    const points = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 360 + 20;
+                      const y = 160 - ((d.stockMarketValue - minValue) / range) * 120;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    const pathPoints = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 360 + 20;
+                      const y = 160 - ((d.stockMarketValue - minValue) / range) * 120;
+                      return `${x},${y}`;
+                    });
+                    
+                    const pathData = pathPoints.length > 1 
+                      ? `M ${pathPoints[0]} L ${pathPoints.slice(1).join(' L ')} L ${pathPoints[pathPoints.length - 1].split(',')[0]},160 L ${pathPoints[0].split(',')[0]},160 Z`
+                      : '';
+                    
+                    return (
+                      <g>
+                        {pathData && <path d={pathData} fill="url(#stockGradientLarge)" />}
+                        <polyline
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="3"
+                          points={points}
+                        />
+                        {historicalData.map((d, i) => {
+                          const x = (i / Math.max(historicalData.length - 1, 1)) * 360 + 20;
+                          const y = 160 - ((d.stockMarketValue - minValue) / range) * 120;
+                          return (
+                            <circle
+                              key={i}
+                              cx={x}
+                              cy={y}
+                              r="3"
+                              fill="#10b981"
+                            />
+                          );
+                        })}
+                        {/* Y-axis labels */}
+                        <text x="10" y="45" fill="#6b7280" fontSize="12">{maxValue.toFixed(0)}</text>
+                        <text x="10" y="165" fill="#6b7280" fontSize="12">{minValue.toFixed(0)}</text>
+                        {/* X-axis labels */}
+                        <text x="20" y="185" fill="#6b7280" fontSize="12">Start</text>
+                        <text x="360" y="185" fill="#6b7280" fontSize="12">Now</text>
+                      </g>
+                    );
+                  })()}
+                </svg>
+              </div>
+            </div>
+
+            {/* Inflation Chart */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Inflation Rate Over Time</h3>
+              <div className="h-64 bg-red-50 rounded p-4">
+                <svg width="100%" height="100%" viewBox="0 0 400 200" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="inflationGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.1"/>
+                    </linearGradient>
+                  </defs>
+                  {(() => {
+                    const maxValue = Math.max(...historicalData.map(d => d.inflation * 100), 6);
+                    const minValue = 0;
+                    const range = maxValue - minValue;
+                    
+                    const points = historicalData.map((d, i) => {
+                      const x = (i / Math.max(historicalData.length - 1, 1)) * 360 + 20;
+                      const y = 160 - ((d.inflation * 100 - minValue) / range) * 120;
+                      return `${x},${y}`;
+                    }).join(' ');
+                    
+                    return (
+                      <g>
+                        <polyline
+                          fill="none"
+                          stroke="#ef4444"
+                          strokeWidth="3"
+                          points={points}
+                        />
+                        {historicalData.map((d, i) => {
+                          const x = (i / Math.max(historicalData.length - 1, 1)) * 360 + 20;
+                          const y = 160 - ((d.inflation * 100 - minValue) / range) * 120;
+                          return (
+                            <circle
+                              key={i}
+                              cx={x}
+                              cy={y}
+                              r="3"
+                              fill="#ef4444"
+                            />
+                          );
+                        })}
+                        {/* Y-axis labels */}
+                        <text x="10" y="45" fill="#6b7280" fontSize="12">{maxValue.toFixed(1)}%</text>
+                        <text x="10" y="165" fill="#6b7280" fontSize="12">0%</text>
+                        {/* X-axis labels */}
+                        <text x="20" y="185" fill="#6b7280" fontSize="12">Start</text>
+                        <text x="360" y="185" fill="#6b7280" fontSize="12">Now</text>
+                      </g>
+                    );
+                  })()}
+                </svg>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Economic Impact on Your Finances */}
+        {personalData.currentSalary > 0 && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Economic Impact on Your Finances</h2>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-800 mb-2">Salary Purchasing Power</h3>
+                <p className="text-lg font-bold text-blue-900">
+                  ${(personalData.currentSalary / economicState.cumulativeInflation).toLocaleString()}
+                </p>
+                <p className="text-sm text-blue-700">
+                  Inflation-adjusted value of your salary
+                </p>
+              </div>
+              
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-yellow-800 mb-2">Cost of Living Impact</h3>
+                <p className="text-lg font-bold text-yellow-900">
+                  +{((economicState.cumulativeInflation - 1) * 100).toFixed(1)}%
+                </p>
+                <p className="text-sm text-yellow-700">
+                  Increase in expenses since simulation start
+                </p>
+              </div>
+              
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-green-800 mb-2">Investment Strategy</h3>
+                <p className="text-sm text-green-700">
+                  {economicState.economicCycle === 'expansion' && "Consider growth investments"}
+                  {economicState.economicCycle === 'peak' && "Focus on defensive positions"}
+                  {economicState.economicCycle === 'recession' && "Look for value opportunities"}
+                  {economicState.economicCycle === 'trough' && "Time to buy the dip"}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Market Volatility Warning */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Market Simulation Notice
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  This is a simulated economic environment for educational purposes. Real markets are influenced by many more factors including geopolitical events, technological changes, monetary policy, and global economic conditions.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderCurrentMode = () => {
     switch (currentMode) {
       case 'personal':
@@ -1779,6 +2468,8 @@ export const LifeSimulator: React.FC = () => {
         return renderSalaryPage();
       case 'expenses':
         return renderExpensesPage();
+      case 'economy':
+        return renderEconomyPage();
       case 'realistic':
         return renderRealisticMode();
       case 'custom':
