@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, BarChart3, TrendingUp, DollarSign, Calendar, User, Zap, Target, Home, Car, Receipt, Globe, FastForward, RotateCcw } from 'lucide-react';
+import { Play, Pause, Square, BarChart3, TrendingUp, DollarSign, User, Target, Receipt, Globe, RotateCcw } from 'lucide-react';
 
 type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses';
 
@@ -61,7 +61,7 @@ export const LifeSimulator: React.FC = () => {
     age: 0,
     currentSalary: 0,
     state: '',
-    savings: 5000,
+    savings: 0,
     investments: 0,
     debtAmount: 0,
     debtInterestRate: 0,
@@ -69,7 +69,7 @@ export const LifeSimulator: React.FC = () => {
     retirementGoal: 1000000,
     emergencyFundMonths: 6,
     riskTolerance: 'moderate',
-    monthlyInvestment: 500,
+    monthlyInvestment: 0,
     plannedPurchases: []
   });
 
@@ -78,7 +78,7 @@ export const LifeSimulator: React.FC = () => {
   const [simulationProgress, setSimulationProgress] = useState<SimulationProgress>({
     currentDate: new Date(),
     startDate: new Date(),
-    currentAge: 25,
+    currentAge: 0,
     yearsElapsed: 0,
     monthsElapsed: 0,
     daysElapsed: 0,
@@ -93,7 +93,7 @@ export const LifeSimulator: React.FC = () => {
   // Financial tracking
   const [financials, setFinancials] = useState({
     currentSalary: 0,
-    netWorth: 5000,
+    netWorth: 0,
     annualExpenses: 0
   });
 
@@ -102,6 +102,14 @@ export const LifeSimulator: React.FC = () => {
   
   // Salary actions state
   const [salaryActionTaken, setSalaryActionTaken] = useState(false);
+
+  // Event notifications state
+  const [recentEvents, setRecentEvents] = useState<Array<{
+    type: string;
+    description: string;
+    timestamp: Date;
+    id: string;
+  }>>([]);
 
   // User's custom rent data
   const [userRentData, setUserRentData] = useState<{ [key: string]: number }>({});
@@ -119,54 +127,12 @@ export const LifeSimulator: React.FC = () => {
 
   const intervalRef = useRef<number | null>(null);
 
-  // Investment return calculation
-  const calculateInvestmentReturn = (amount: number, riskLevel: string): number => {
-    const returns = {
-      conservative: 0.04,
-      moderate: 0.07,
-      aggressive: 0.10
-    };
-    const volatility = Math.random() * 0.3 - 0.15; // ±15% volatility
-    return amount * (returns[riskLevel as keyof typeof returns] + volatility);
-  };
-
-  // Market event simulation
-  const simulateMarketEvents = (): { type: string; impact: number; description: string } | null => {
-    const eventChance = Math.random();
-    if (eventChance < 0.05) { // 5% chance of major event per month
-      const events = [
-        { type: 'recession', impact: -0.3, description: 'Economic recession hits the market' },
-        { type: 'boom', impact: 0.4, description: 'Bull market surge boosts investments' },
-        { type: 'correction', impact: -0.15, description: 'Market correction affects portfolio' },
-        { type: 'rally', impact: 0.2, description: 'Market rally increases investment value' }
-      ];
-      return events[Math.floor(Math.random() * events.length)];
-    }
-    return null;
-  };
-
-  // Life event simulation
-  const simulateLifeEvents = (age: number): { type: string; cost?: number; description: string } | null => {
-    const eventChance = Math.random();
-    if (eventChance < 0.03) { // 3% chance per month
-      const events = [
-        { type: 'medical', cost: 5000, description: 'Unexpected medical expense' },
-        { type: 'car_repair', cost: 2000, description: 'Major car repair needed' },
-        { type: 'promotion', description: 'Received a promotion and salary increase!' },
-        { type: 'bonus', description: 'Year-end bonus received' },
-        { type: 'emergency', cost: 3000, description: 'Home emergency repair' }
-      ];
-      return events[Math.floor(Math.random() * events.length)];
-    }
-    return null;
-  };
-
   // Main simulation step function
   const runSimulationStep = () => {
     setSimulationProgress(prev => {
-      const newDate = new Date(prev.currentDate.getTime() + (30 * 24 * 60 * 60 * 1000 * prev.speedMultiplier)); // Add month(s)
-      const monthsElapsed = Math.floor((newDate.getTime() - prev.startDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
-      const yearsElapsed = Math.floor(monthsElapsed / 12);
+      const newDate = new Date(prev.currentDate.getTime() + (365 * 24 * 60 * 60 * 1000)); // Add exactly 1 year
+      const yearsElapsed = Math.floor((newDate.getTime() - prev.startDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
+      const monthsElapsed = yearsElapsed * 12;
       const currentAge = personalData.age + yearsElapsed;
 
       return {
@@ -183,73 +149,38 @@ export const LifeSimulator: React.FC = () => {
     setPersonalData(prev => {
       let newData = { ...prev };
       
-      // Monthly salary (after taxes, simplified)
-      const monthlySalary = prev.currentSalary / 12 * 0.75; // Rough after-tax
+      // Annual salary (after taxes, simplified)
+      const annualSalaryAfterTax = prev.currentSalary * 0.75; // Rough after-tax
       
-      // Monthly expenses (simplified)
-      const monthlyExpenses = financials.annualExpenses / 12;
+      // Annual expenses
+      const annualExpenses = financials.annualExpenses;
       
-      // Monthly savings
-      const monthlySavings = monthlySalary - monthlyExpenses;
+      // Annual savings (just track the difference)
+      const annualSavings = annualSalaryAfterTax - annualExpenses;
       
-      // Update savings
-      newData.savings = Math.max(0, prev.savings + monthlySavings);
-      
-      // Investment returns
-      if (prev.investments > 0) {
-        const monthlyReturn = calculateInvestmentReturn(prev.investments, prev.riskTolerance) / 12;
-        newData.investments = prev.investments + monthlyReturn + prev.monthlyInvestment;
-      } else {
-        newData.investments = prev.investments + prev.monthlyInvestment;
-      }
-
-      // Debt payments (if any)
-      if (prev.debtAmount > 0) {
-        const monthlyPayment = prev.debtAmount * 0.02; // 2% of debt per month
-        const interestPayment = (prev.debtAmount * prev.debtInterestRate / 100) / 12;
-        newData.debtAmount = Math.max(0, prev.debtAmount - monthlyPayment + interestPayment);
-      }
+      // Update savings (simple accumulation)
+      newData.savings = prev.savings + annualSavings;
 
       return newData;
     });
 
-    // Simulate events
-    const marketEvent = simulateMarketEvents();
-    const lifeEvent = simulateLifeEvents(simulationProgress.currentAge);
-
-    // Apply market events
-    if (marketEvent) {
-      setPersonalData(prev => ({
-        ...prev,
-        investments: prev.investments * (1 + marketEvent.impact)
-      }));
-    }
-
-    // Apply life events
-    if (lifeEvent && lifeEvent.cost) {
-      setPersonalData(prev => ({
-        ...prev,
-        savings: Math.max(0, prev.savings - lifeEvent.cost!)
-      }));
-    }
-
-    // Record historical data
+    // Record historical data (simplified)
     setHistoricalData(prev => {
       const newPoint: HistoricalDataPoint = {
         age: simulationProgress.currentAge,
-        netWorth: personalData.savings + personalData.investments - personalData.debtAmount,
+        netWorth: personalData.savings,
         salary: personalData.currentSalary,
-        investments: personalData.investments,
-        debt: personalData.debtAmount,
+        investments: 0,
+        debt: 0,
         timestamp: new Date()
       };
       return [...prev, newPoint];
     });
 
-    // Update net worth
+    // Update net worth (simplified)
     setFinancials(prev => ({
       ...prev,
-      netWorth: personalData.savings + personalData.investments - personalData.debtAmount
+      netWorth: personalData.savings
     }));
 
     // Check if simulation should end
@@ -261,16 +192,24 @@ export const LifeSimulator: React.FC = () => {
   // Simulation controls
   const startSimulation = () => {
     setSimulationState('running');
-    setHasStarted(true);
-    setSimulationProgress(prev => ({
-      ...prev,
-      startDate: new Date(),
-      currentDate: new Date()
-    }));
+    
+    // Only reset simulation progress if this is the very first start
+    if (!hasStarted) {
+      setHasStarted(true);
+      setSimulationProgress(prev => ({
+        ...prev,
+        startDate: new Date(),
+        currentDate: new Date(),
+        currentAge: personalData.age,
+        yearsElapsed: 0,
+        monthsElapsed: 0,
+        daysElapsed: 0
+      }));
+    }
     
     intervalRef.current = window.setInterval(() => {
       runSimulationStep();
-    }, 1000 / simulationProgress.speedMultiplier); // Adjust speed
+    }, 5000); // Fixed 5 seconds per year
   };
 
   const pauseSimulation = () => {
@@ -289,6 +228,106 @@ export const LifeSimulator: React.FC = () => {
     }
   };
 
+  // Career action functions
+  const handlePromotion = () => {
+    const salaryIncrease = 0.15; // 15% increase
+    setPersonalData(prev => ({
+      ...prev,
+      currentSalary: prev.currentSalary * (1 + salaryIncrease)
+    }));
+    setFinancials(prev => ({
+      ...prev,
+      currentSalary: prev.currentSalary * (1 + salaryIncrease)
+    }));
+    setSalaryActionTaken(true);
+    
+    // Add to events
+    setRecentEvents(prev => {
+      const newEvent = {
+        type: 'promotion',
+        description: 'You got promoted with a 15% salary increase!',
+        timestamp: new Date(),
+        id: Math.random().toString(36).substr(2, 9)
+      };
+      return [newEvent, ...prev].slice(0, 5);
+    });
+  };
+
+  const handleDemotion = () => {
+    const salaryDecrease = 0.10; // 10% decrease
+    setPersonalData(prev => ({
+      ...prev,
+      currentSalary: prev.currentSalary * (1 - salaryDecrease)
+    }));
+    setFinancials(prev => ({
+      ...prev,
+      currentSalary: prev.currentSalary * (1 - salaryDecrease)
+    }));
+    setSalaryActionTaken(true);
+    
+    // Add to events
+    setRecentEvents(prev => {
+      const newEvent = {
+        type: 'demotion',
+        description: 'You were demoted with a 10% salary decrease',
+        timestamp: new Date(),
+        id: Math.random().toString(36).substr(2, 9)
+      };
+      return [newEvent, ...prev].slice(0, 5);
+    });
+  };
+
+  const handleQuitJob = () => {
+    setPersonalData(prev => ({
+      ...prev,
+      currentSalary: 0
+    }));
+    setFinancials(prev => ({
+      ...prev,
+      currentSalary: 0
+    }));
+    setSalaryActionTaken(true);
+    
+    // Add to events
+    setRecentEvents(prev => {
+      const newEvent = {
+        type: 'layoff',
+        description: 'You quit your job and are now unemployed',
+        timestamp: new Date(),
+        id: Math.random().toString(36).substr(2, 9)
+      };
+      return [newEvent, ...prev].slice(0, 5);
+    });
+  };
+
+  const handleNewJob = () => {
+    const newSalary = prompt('Enter your new job salary:');
+    if (newSalary && !isNaN(Number(newSalary))) {
+      const salary = Number(newSalary);
+      setPersonalData(prev => ({
+        ...prev,
+        currentSalary: salary
+      }));
+      setFinancials(prev => ({
+        ...prev,
+        currentSalary: salary
+      }));
+      setSalaryActionTaken(true);
+      
+      // Add to events
+      setRecentEvents(prev => {
+        const newEvent = {
+          type: 'bonus',
+          description: `You got a new job with salary $${salary.toLocaleString()}!`,
+          timestamp: new Date(),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+        return [newEvent, ...prev].slice(0, 5);
+      });
+    }
+  };
+
+  // Reset salary action flag when simulation is reset
   const resetSimulation = () => {
     stopSimulation();
     setSimulationProgress({
@@ -302,14 +341,19 @@ export const LifeSimulator: React.FC = () => {
     });
     setHistoricalData([]);
     setHasStarted(false);
-  };
-
-  const changeSpeed = (newSpeed: number) => {
-    setSimulationProgress(prev => ({ ...prev, speedMultiplier: newSpeed }));
-    if (simulationState === 'running') {
-      pauseSimulation();
-      setTimeout(() => startSimulation(), 100);
-    }
+    setSalaryActionTaken(false);
+    setRecentEvents([]);
+    
+    // Reset savings to 0
+    setPersonalData(prev => ({
+      ...prev,
+      savings: 0
+    }));
+    
+    setFinancials(prev => ({
+      ...prev,
+      netWorth: 0
+    }));
   };
 
   // Cleanup interval on unmount
@@ -639,10 +683,10 @@ export const LifeSimulator: React.FC = () => {
         {/* Header */}
         <div className="flex items-center mb-6">
           <button
-            onClick={() => setCurrentMode('selection')}
+            onClick={() => setCurrentMode('personal')}
             className="flex items-center text-orange-600 hover:text-orange-800 mr-4"
           >
-            ← Back to Home
+            ← Back to Dashboard
           </button>
           <Receipt className="h-8 w-8 text-orange-600 mr-3" />
           <h1 className="text-3xl font-bold text-gray-800">Expense Management</h1>
@@ -1187,13 +1231,6 @@ export const LifeSimulator: React.FC = () => {
                   </button>
                 )}
                 <button
-                  onClick={stopSimulation}
-                  className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  <Square className="h-4 w-4 mr-2" />
-                  Stop
-                </button>
-                <button
                   onClick={resetSimulation}
                   className="flex items-center bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
                 >
@@ -1221,18 +1258,6 @@ export const LifeSimulator: React.FC = () => {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-800">Life Simulation Progress</h2>
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-600">Speed:</span>
-                {[1, 2, 5, 10].map(speed => (
-                  <button
-                    key={speed}
-                    onClick={() => changeSpeed(speed)}
-                    className={`px-3 py-1 rounded text-sm ${simulationProgress.speedMultiplier === speed ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-                  >
-                    {speed}x
-                  </button>
-                ))}
-              </div>
             </div>
             
             <div className="grid md:grid-cols-4 gap-4">
@@ -1254,30 +1279,43 @@ export const LifeSimulator: React.FC = () => {
               <div className="bg-orange-50 p-4 rounded-lg text-center">
                 <h3 className="font-semibold text-orange-800 mb-1">Simulation State</h3>
                 <p className="text-lg font-bold text-orange-900 capitalize">{simulationState}</p>
-                <p className="text-sm text-orange-700">{simulationProgress.speedMultiplier}x speed</p>
+                <p className="text-sm text-orange-700">1 year per 5 seconds</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* User Info Summary */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Your Profile</h2>
-          <div className="grid md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Age:</span>
-              <span className="ml-2 font-semibold">{personalData.age} years old</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Salary:</span>
-              <span className="ml-2 font-semibold">${personalData.currentSalary.toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Location:</span>
-              <span className="ml-2 font-semibold">{personalData.state}</span>
+        {/* Recent Events */}
+        {recentEvents.length > 0 && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Life Events</h2>
+            <div className="space-y-2">
+              {recentEvents.map((event) => (
+                <div key={event.id} className={`p-3 rounded-lg flex items-center justify-between ${
+                  event.type === 'promotion' ? 'bg-green-50 border-l-4 border-green-400' :
+                  event.type === 'demotion' ? 'bg-yellow-50 border-l-4 border-yellow-400' :
+                  event.type === 'layoff' ? 'bg-red-50 border-l-4 border-red-400' :
+                  event.type === 'bonus' ? 'bg-blue-50 border-l-4 border-blue-400' :
+                  'bg-gray-50 border-l-4 border-gray-400'
+                }`}>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{event.description}</p>
+                    <p className="text-xs text-gray-500">{event.timestamp.toLocaleTimeString()}</p>
+                  </div>
+                  <div className="text-lg">
+                    {event.type === 'promotion' && '🎉'}
+                    {event.type === 'demotion' && '⬇️'}
+                    {event.type === 'layoff' && '🚫'}
+                    {event.type === 'bonus' && '💰'}
+                    {event.type === 'medical' && '🏥'}
+                    {event.type === 'car_repair' && '🔧'}
+                    {event.type === 'emergency' && '🚨'}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
 
         {/* Main Dashboard Cards */}
         <div className="grid md:grid-cols-3 gap-8">
@@ -1290,11 +1328,11 @@ export const LifeSimulator: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Net Worth</h3>
-                <p className="text-sm text-gray-600">Assets minus debts</p>
+                <p className="text-sm text-gray-600">Accumulated savings</p>
               </div>
             </div>
             <div className="text-3xl font-bold text-purple-600 mb-2">
-              ${(personalData.savings + personalData.investments - personalData.debtAmount).toLocaleString()}
+              ${personalData.savings.toLocaleString()}
             </div>
             <p className="text-sm text-gray-500">Click to view breakdown</p>
             
@@ -1397,6 +1435,49 @@ export const LifeSimulator: React.FC = () => {
           </button>
           <DollarSign className="h-8 w-8 text-green-600 mr-3" />
           <h1 className="text-3xl font-bold text-gray-800">Salary & Income Management</h1>
+        </div>
+
+        {/* Career Actions */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Career Actions</h2>
+          <p className="text-sm text-gray-600 mb-4">Simulate career events that affect your salary</p>
+          <div className="grid md:grid-cols-4 gap-4">
+            <button
+              onClick={handlePromotion}
+              className="flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-800 px-4 py-3 rounded-lg transition-colors font-medium"
+            >
+              <TrendingUp className="h-5 w-5 mr-2" />
+              Get Promotion
+            </button>
+            <button
+              onClick={handleDemotion}
+              className="flex items-center justify-center bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-4 py-3 rounded-lg transition-colors font-medium"
+            >
+              <TrendingUp className="h-5 w-5 mr-2 transform rotate-180" />
+              Get Demoted
+            </button>
+            <button
+              onClick={handleQuitJob}
+              className="flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-800 px-4 py-3 rounded-lg transition-colors font-medium"
+            >
+              <Square className="h-5 w-5 mr-2" />
+              Quit Job
+            </button>
+            <button
+              onClick={handleNewJob}
+              className="flex items-center justify-center bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-3 rounded-lg transition-colors font-medium"
+            >
+              <User className="h-5 w-5 mr-2" />
+              New Job
+            </button>
+          </div>
+          {salaryActionTaken && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 Career action taken! Your new salary is ${personalData.currentSalary.toLocaleString()}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Tax Calculation Results */}
