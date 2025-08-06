@@ -38,11 +38,9 @@ export interface PersonalFinancialData {
 
 // Planned purchase interface
 export interface PlannedPurchase {
-  id: string;
-  name: string;
+  item: string;
   cost: number;
-  targetAge: number;
-  description?: string;
+  targetYear: number;
 }
 
 // Simulation progress tracking
