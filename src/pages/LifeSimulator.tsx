@@ -156,6 +156,7 @@ export const LifeSimulator: React.FC = () => {
   
   // Track if user has completed the initial setup
   const [setupCompleted, setSetupCompleted] = useState(false);
+  const [setupStep, setSetupStep] = useState(1); // 1: Basic Info, 2: Job Info
   
   // Salary actions state
   const [salaryActionTaken, setSalaryActionTaken] = useState(false);
@@ -390,7 +391,6 @@ export const LifeSimulator: React.FC = () => {
   // Main simulation step function
   const runSimulationStep = () => {
     let newAge = simulationProgress.currentAge;
-    let newSavings = personalData.savings;
     
     // Use the current ref value as the previous year for YoY calculation
     const previousYearValue = currentStockIndexRef.current;
@@ -437,27 +437,6 @@ export const LifeSimulator: React.FC = () => {
       // Adjust salary for inflation (salary typically keeps up partially with inflation)
       const salaryInflationAdjustment = 1 + (newEconomicState.currentInflationRate * 0.8); // 80% inflation adjustment
       newData.currentSalary = prev.currentSalary * salaryInflationAdjustment;
-      
-      // Calculate actual after-tax income using our tax calculation function
-      const contribution401kTraditional = newData.currentSalary * personalData.contributions401kTraditional / 100;
-      const contribution401kRoth = newData.currentSalary * personalData.contributions401kRoth / 100;
-      // Calculate the new simulation year directly (current year + 1)
-      const simulationYear = simulationProgress.currentDate.getFullYear() + 1;
-      const taxInfo = calculateTaxes(newData.currentSalary, personalData.state, contribution401kTraditional, contribution401kRoth, simulationYear);
-      const annualSalaryAfterTax = taxInfo.afterTaxIncome;
-      
-      // Apply inflation to housing and grocery costs specifically
-      const currentInflationRate = newEconomicState.currentInflationRate;
-      
-      // Annual expenses (affected by inflation)
-      const inflationAdjustedExpenses = financials.annualExpenses * (1 + currentInflationRate);
-      
-      // Annual savings (just track the difference)
-      const annualSavings = annualSalaryAfterTax - inflationAdjustedExpenses;
-      
-      // Update savings (simple accumulation)
-      newData.savings = prev.savings + annualSavings;
-      newSavings = newData.savings;
 
       return newData;
     });
@@ -563,19 +542,41 @@ export const LifeSimulator: React.FC = () => {
       return newGroceryData;
     });
 
-    // Update net worth to include savings and investments
+    // Calculate proper net worth: Assets - Liabilities
+    // Net worth = Cash savings + Investment accounts + 401k balance - Debt
+    const updatedAnnualExpenses = financials.annualExpenses * (1 + newEconomicState.currentInflationRate);
+    
+    // Update personalData savings based on cash flow this year
+    let updatedSavings = personalData.savings;
+    setPersonalData(prev => {
+      const contribution401kTraditional = prev.currentSalary * prev.contributions401kTraditional / 100;
+      const contribution401kRoth = prev.currentSalary * prev.contributions401kRoth / 100;
+      const simulationYear = simulationProgress.currentDate.getFullYear();
+      const taxInfo = calculateTaxes(prev.currentSalary, prev.state, contribution401kTraditional, contribution401kRoth, simulationYear);
+      const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses;
+      
+      updatedSavings = prev.savings + annualCashFlow;
+      return {
+        ...prev,
+        savings: updatedSavings
+      };
+    });
+    
+    const calculatedNetWorth = updatedSavings + newInvestmentValue;
+
+    // Update net worth with proper calculation
     setFinancials(prev => ({
       ...prev,
-      netWorth: newSavings + newInvestmentValue,
+      netWorth: calculatedNetWorth,
       currentSalary: personalData.currentSalary,
-      annualExpenses: prev.annualExpenses * (1 + newEconomicState.currentInflationRate) // Update expenses for inflation
+      annualExpenses: updatedAnnualExpenses // Update expenses for inflation
     }));
 
     // Record historical data with the updated values
     setHistoricalData(prev => {
       const newPoint: HistoricalDataPoint = {
         age: newAge,
-        netWorth: newSavings + newInvestmentValue,
+        netWorth: calculatedNetWorth,
         salary: personalData.currentSalary,
         investments: newInvestmentValue,
         debt: 0,
@@ -613,10 +614,12 @@ export const LifeSimulator: React.FC = () => {
         daysElapsed: 0
       }));
       
-      // Initialize historical data with the starting point
+      // Initialize historical data with the starting point using proper net worth calculation
+      const initialNetWorth = personalData.savings + financials.investmentAccountValue;
+      
       setHistoricalData([{
         age: personalData.age,
-        netWorth: personalData.savings + financials.investmentAccountValue,
+        netWorth: initialNetWorth,
         salary: personalData.currentSalary,
         investments: financials.investmentAccountValue,
         debt: 0,
@@ -789,6 +792,7 @@ export const LifeSimulator: React.FC = () => {
     setHistoricalData([]);
     setHasStarted(false);
     setSetupCompleted(false);
+    setSetupStep(1);
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
@@ -1309,10 +1313,16 @@ export const LifeSimulator: React.FC = () => {
   // Update financials effect
   useEffect(() => {
     const annualExpenses = calculateAnnualExpenses();
+    
+    // Calculate proper net worth: Assets - Liabilities
+    // Net worth = Cash savings + Investment accounts + 401k balance - Debt
+    const netWorth = personalData.savings + financials.investmentAccountValue; // No debt currently tracked
+    
     setFinancials(prev => ({
       ...prev,
       currentSalary: personalData.currentSalary,
-      annualExpenses: annualExpenses
+      annualExpenses: annualExpenses,
+      netWorth: netWorth
     }));
   }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted]);
 
@@ -2313,7 +2323,7 @@ export const LifeSimulator: React.FC = () => {
     const taxInfo = calculateTaxes(financials.currentSalary, personalData.state, contribution401kTraditional, contribution401kRoth);
 
     // If basic info not complete OR user hasn't clicked continue, show setup screen
-    if (!personalData.age || !personalData.currentSalary || !personalData.state || !setupCompleted) {
+    if (!personalData.age || !personalData.currentSalary || !personalData.state || !personalData.careerField || !setupCompleted) {
       return (
         <div className="space-y-8">
           {/* Header */}
@@ -2321,6 +2331,7 @@ export const LifeSimulator: React.FC = () => {
             <button
               onClick={() => {
                 setSetupCompleted(false);
+                setSetupStep(1);
                 setCurrentMode('selection');
               }}
               className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
@@ -2333,82 +2344,237 @@ export const LifeSimulator: React.FC = () => {
 
           {/* Basic Information Setup */}
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Tell us about yourself</h2>
-            
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your Age</label>
-                <input
-                  type="number"
-                  value={personalData.age || ''}
-                  onChange={(e) => setPersonalData(prev => ({ ...prev, age: parseInt(e.target.value) || 0 }))}
-                  placeholder="Enter your age"
-                  className="w-full p-3 border border-gray-300 rounded-lg text-lg"
-                  min="18"
-                  max="100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Annual Salary</label>
-                <input
-                  type="number"
-                  value={personalData.currentSalary || ''}
-                  onChange={(e) => {
-                    const salary = parseFloat(e.target.value) || 0;
-                    const roundedSalary = Math.round(salary * 100) / 100; // Limit to 2 decimal places
-                    setPersonalData(prev => ({ ...prev, currentSalary: roundedSalary }));
-                    setFinancials(prev => ({ ...prev, currentSalary: roundedSalary }));
-                    // Update original salary reference since simulation hasn't started yet
-                    originalSalaryRef.current = roundedSalary;
-                  }}
-                  placeholder="Enter your annual salary"
-                  className="w-full p-3 border border-gray-300 rounded-lg text-lg"
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                <select
-                  value={personalData.state}
-                  onChange={(e) => setPersonalData(prev => ({ ...prev, state: e.target.value }))}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-lg"
-                >
-                  <option value="">Choose your state...</option>
-                  {Object.keys(stateRentData).sort().map(state => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => {
-                    setPersonalData(prev => ({ ...prev, age: 0, currentSalary: 0, state: '' }));
-                    setFinancials(prev => ({ ...prev, currentSalary: 0 }));
-                    originalSalaryRef.current = 0;
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors text-lg font-semibold"
-                >
-                  Clear Form
-                </button>
-                
-                <button
-                  onClick={() => {
-                    // Basic validation and setup completion
-                    if (personalData.age && personalData.currentSalary && personalData.state) {
-                      setSetupCompleted(true);
-                    }
-                  }}
-                  disabled={!personalData.age || !personalData.currentSalary || !personalData.state}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
-                >
-                  Continue to Dashboard
-                </button>
+            {/* Progress indicator */}
+            <div className="flex items-center justify-center mb-8">
+              <div className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  setupStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
+                }`}>
+                  1
+                </div>
+                <div className={`w-16 h-1 ${setupStep >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  setupStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
+                }`}>
+                  2
+                </div>
               </div>
             </div>
+
+            {setupStep === 1 && (
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Personal Information</h2>
+                <p className="text-center text-gray-600 mb-8">Let's start with some basic information about you.</p>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Your Age</label>
+                    <input
+                      type="number"
+                      value={personalData.age || ''}
+                      onChange={(e) => setPersonalData(prev => ({ ...prev, age: parseInt(e.target.value) || 0 }))}
+                      placeholder="Enter your age"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                      min="18"
+                      max="100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+                    <select
+                      value={personalData.state}
+                      onChange={(e) => setPersonalData(prev => ({ ...prev, state: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                    >
+                      <option value="">Choose your state...</option>
+                      {Object.keys(stateRentData).sort().map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => {
+                        setPersonalData(prev => ({ ...prev, age: 0, state: '' }));
+                      }}
+                      className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors text-lg font-semibold"
+                    >
+                      Clear
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        if (personalData.age && personalData.state) {
+                          setSetupStep(2);
+                        }
+                      }}
+                      disabled={!personalData.age || !personalData.state}
+                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
+                    >
+                      Next: Job Info
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {setupStep === 2 && (
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Job & Financial Information</h2>
+                <p className="text-center text-gray-600 mb-8">Now let's set up your employment and 401(k) details. You can skip fields you're unsure about.</p>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Annual Salary</label>
+                    <input
+                      type="number"
+                      value={personalData.currentSalary || ''}
+                      onChange={(e) => {
+                        const salary = parseFloat(e.target.value) || 0;
+                        const roundedSalary = Math.round(salary * 100) / 100;
+                        setPersonalData(prev => ({ ...prev, currentSalary: roundedSalary }));
+                        setFinancials(prev => ({ ...prev, currentSalary: roundedSalary }));
+                        originalSalaryRef.current = roundedSalary;
+                      }}
+                      placeholder="Enter your annual salary"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Career Field</label>
+                    <select
+                      value={personalData.careerField}
+                      onChange={(e) => {
+                        const newField = e.target.value as PersonalFinancialData['careerField'];
+                        setPersonalData(prev => ({
+                          ...prev,
+                          careerField: newField,
+                          stockBonus: (newField === 'Government' || newField === 'Service') ? 0 : prev.stockBonus
+                        }));
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                    >
+                      <option value="">Select career field...</option>
+                      <option value="Tech">Tech</option>
+                      <option value="Government">Government</option>
+                      <option value="Service">Service</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">401(k) Company Match (%)</label>
+                    <input
+                      type="number"
+                      value={personalData.match401k}
+                      onChange={(e) => setPersonalData(prev => ({
+                        ...prev,
+                        match401k: Math.max(0, Math.min(100, Math.round(Number(e.target.value) * 100) / 100))
+                      }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                      max="100"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">Percentage of salary matched by employer</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Traditional 401(k) (%)</label>
+                      <input
+                        type="number"
+                        value={personalData.contributions401kTraditional}
+                        onChange={(e) => {
+                          const percentage = Number(e.target.value);
+                          const roundedPercentage = Math.round(percentage * 100) / 100;
+                          const current401kLimit = get401kLimit();
+                          const totalCurrent = personalData.contributions401kRoth;
+                          const maxPercentage = personalData.currentSalary > 0 ? Math.floor(((current401kLimit / personalData.currentSalary) * 100) * 100) / 100 : 100;
+                          const maxTraditional = Math.max(0, maxPercentage - totalCurrent);
+                          
+                          setPersonalData(prev => ({
+                            ...prev,
+                            contributions401kTraditional: Math.max(0, Math.min(maxTraditional, roundedPercentage))
+                          }));
+                        }}
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Pre-tax contribution</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Roth 401(k) (%)</label>
+                      <input
+                        type="number"
+                        value={personalData.contributions401kRoth}
+                        onChange={(e) => {
+                          const percentage = Number(e.target.value);
+                          const roundedPercentage = Math.round(percentage * 100) / 100;
+                          const current401kLimit = get401kLimit();
+                          const totalCurrent = personalData.contributions401kTraditional;
+                          const maxPercentage = personalData.currentSalary > 0 ? Math.floor(((current401kLimit / personalData.currentSalary) * 100) * 100) / 100 : 100;
+                          const maxRoth = Math.max(0, maxPercentage - totalCurrent);
+                          
+                          setPersonalData(prev => ({
+                            ...prev,
+                            contributions401kRoth: Math.max(0, Math.min(maxRoth, roundedPercentage))
+                          }));
+                        }}
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        placeholder="0"
+                        min="0"
+                        step="0.01"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">After-tax contribution</p>
+                    </div>
+                  </div>
+
+                  {personalData.currentSalary > 0 && (personalData.contributions401kTraditional > 0 || personalData.contributions401kRoth > 0) && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        Total 401(k): ${Math.min(
+                          personalData.currentSalary * (personalData.contributions401kTraditional + personalData.contributions401kRoth) / 100,
+                          get401kLimit()
+                        ).toLocaleString()} annually
+                        <span className="block text-xs">
+                          IRS limit: ${get401kLimit().toLocaleString()}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={() => setSetupStep(1)}
+                      className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors text-lg font-semibold"
+                    >
+                      ← Previous
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        if (personalData.currentSalary && personalData.careerField) {
+                          setSetupCompleted(true);
+                        }
+                      }}
+                      disabled={!personalData.currentSalary || !personalData.careerField}
+                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
+                    >
+                      Start Simulation
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -2425,6 +2591,7 @@ export const LifeSimulator: React.FC = () => {
           <button
             onClick={() => {
               setSetupCompleted(false);
+              setSetupStep(1);
               setCurrentMode('selection');
             }}
             className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
@@ -2510,13 +2677,13 @@ export const LifeSimulator: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Net Worth</h3>
-                <p className="text-sm text-gray-600">Accumulated savings</p>
+                <p className="text-sm text-gray-600">Assets - Liabilities</p>
               </div>
             </div>
             <div className="text-3xl font-bold text-purple-600 mb-2">
-              ${personalData.savings.toLocaleString()}
+              ${financials.netWorth.toLocaleString()}
             </div>
-            <p className="text-sm text-gray-500">Click to view breakdown</p>
+            <p className="text-sm text-gray-500">Cash + Investments (Click to view breakdown)</p>
             
             {/* Mini Line Chart */}
             <div className="mt-4 h-16 bg-purple-50 rounded p-2">
