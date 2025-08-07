@@ -10,7 +10,7 @@ import {
 } from '../types/simulation';
 import { SimulationControls } from './SimulationControls';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
 
 interface TaxInfo {
   totalTax: number;
@@ -173,7 +173,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid md:grid-cols-4 gap-6">
         {/* Net Worth Card */}
         <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
-             onClick={() => alert('Net Worth details coming soon!')}>
+             onClick={() => setCurrentMode('networth')}>
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
               <TrendingUp className="h-6 w-6 text-purple-600" />
@@ -417,15 +417,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
           <div className="grid grid-cols-2 gap-4 mb-3">
             <div>
-              <p className="text-sm text-gray-600">401(k) Rate</p>
+              <p className="text-sm text-gray-600">Total Invested</p>
               <p className="text-lg font-bold text-purple-600">
-                {(personalData.contributions401kTraditional + personalData.contributions401kRoth).toFixed(2)}%
+                ${(financials.investmentAccountValue || personalData.investments || 0).toLocaleString()}
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Risk Level</p>
-              <p className="text-lg font-bold text-purple-600 capitalize">
-                {personalData.riskTolerance}
+              <p className="text-sm text-gray-600">YoY Growth</p>
+              <p className="text-lg font-bold text-purple-600">
+                {(() => {
+                  if (historicalData.length < 2) return '+0.0%';
+                  const currentValue = historicalData[historicalData.length - 1]?.investments || 0;
+                  const previousValue = historicalData[historicalData.length - 2]?.investments || 0;
+                  if (previousValue === 0) return '+0.0%';
+                  const growth = ((currentValue - previousValue) / previousValue) * 100;
+                  const sign = growth >= 0 ? '+' : '';
+                  return `${sign}${growth.toFixed(1)}%`;
+                })()}
               </p>
             </div>
           </div>

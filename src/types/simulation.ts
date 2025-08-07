@@ -1,5 +1,5 @@
 // Core simulation types
-export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy';
+export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
 
 export type SimulationState = 'setup' | 'running' | 'paused' | 'completed';
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import { User } from 'lucide-react';
+import { User, Code } from 'lucide-react';
 import { PersonalFinancialData } from '../types/simulation';
 import { stateRentData } from '../utils/expenseData';
 import { get401kLimit } from '../utils/financialCalculations';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
 
 interface SetupWizardProps {
   // Personal data state
@@ -22,6 +22,9 @@ interface SetupWizardProps {
   // Financial state setters (for salary updates)
   setFinancials: (updater: (prev: any) => any) => void;
   originalSalaryRef: React.MutableRefObject<number>;
+  
+  // Developer tools
+  onDeveloperAutofill?: () => void;
 }
 
 export const SetupWizard: React.FC<SetupWizardProps> = ({
@@ -32,7 +35,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   setSetupCompleted,
   setCurrentMode,
   setFinancials,
-  originalSalaryRef
+  originalSalaryRef,
+  onDeveloperAutofill
 }) => {
   return (
     <div className="space-y-8">
@@ -103,6 +107,25 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   ))}
                 </select>
               </div>
+
+              {/* Developer Autofill Section */}
+              {onDeveloperAutofill && process.env.NODE_ENV === 'development' && (
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <h3 className="text-lg font-semibold text-purple-800 mb-2 flex items-center">
+                    <Code className="h-5 w-5 mr-2" />
+                    Developer Tools
+                  </h3>
+                  <p className="text-purple-700 mb-3 text-sm">
+                    Quickly populate realistic test data for development and testing.
+                  </p>
+                  <button
+                    onClick={onDeveloperAutofill}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                  >
+                    🔧 Generate Test Data & Start Simulation
+                  </button>
+                </div>
+              )}
 
               <div className="flex space-x-4">
                 <button

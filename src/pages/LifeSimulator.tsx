@@ -4,6 +4,7 @@ import { SimulationControls } from '../components/SimulationControls';
 import { Dashboard } from '../components/Dashboard';
 import { SetupWizard } from '../components/SetupWizard';
 import { ModeSelectionPage } from '../components/ModeSelectionPage';
+import { NetWorthPage } from '../components/NetWorthPage';
 import { get401kLimit } from '../utils/financialCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
@@ -85,6 +86,9 @@ export const LifeSimulator: React.FC = () => {
     investmentAccountValue: 0
   });
 
+  // Use ref to persist investment value between simulation steps
+  const currentInvestmentValueRef = useRef(0);
+
   // Track if simulation has ever been started
   const [hasStarted, setHasStarted] = useState(false);
   
@@ -165,7 +169,6 @@ export const LifeSimulator: React.FC = () => {
     });
 
     // Update financials with inflation effects
-    let newInvestmentValue = 0;
     setPersonalData(prev => {
       let newData = { ...prev };
       
@@ -174,39 +177,6 @@ export const LifeSimulator: React.FC = () => {
       newData.currentSalary = prev.currentSalary * salaryInflationAdjustment;
 
       return newData;
-    });
-
-    // Calculate investment growth
-    setFinancials(prevFinancials => {
-      // Calculate 401k contributions
-      const annual401kTraditional = personalData.contributions401kTraditional > 0 ? 
-        (personalData.currentSalary * personalData.contributions401kTraditional / 100) : 0;
-      const annual401kRoth = personalData.contributions401kRoth > 0 ? 
-        (personalData.currentSalary * personalData.contributions401kRoth / 100) : 0;
-      const annual401kContribution = annual401kTraditional + annual401kRoth;
-      const employerMatch = Math.min(
-        annual401kContribution,
-        personalData.currentSalary * personalData.match401k / 100
-      );
-      const total401kContribution = annual401kContribution + employerMatch;
-
-      // Calculate monthly investment contributions (non-401k)
-      const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
-
-      // Apply investment growth to existing portfolio
-      // Use stock market growth rate from economic simulation
-      const investmentGrowthRate = newEconomicState.stockMarketGrowth;
-      const previousInvestmentValue = prevFinancials.investmentAccountValue;
-      
-      // Calculate new investment value: previous value grows + new contributions
-      newInvestmentValue = (previousInvestmentValue * (1 + investmentGrowthRate)) + 
-                          total401kContribution + annualMonthlyInvestments;
-
-      return {
-        ...prevFinancials,
-        investmentAccountValue: newInvestmentValue,
-        investments: newInvestmentValue, // Keep both for compatibility
-      };
     });
 
     // Apply inflation to housing and grocery costs
@@ -296,12 +266,43 @@ export const LifeSimulator: React.FC = () => {
         savings: updatedSavings
       };
     });
+
+    // Calculate investment growth AFTER savings calculation
+    // Calculate 401k contributions
+    const annual401kTraditional = personalData.contributions401kTraditional > 0 ? 
+      (personalData.currentSalary * personalData.contributions401kTraditional / 100) : 0;
+    const annual401kRoth = personalData.contributions401kRoth > 0 ? 
+      (personalData.currentSalary * personalData.contributions401kRoth / 100) : 0;
+    const annual401kContribution = annual401kTraditional + annual401kRoth;
+    const employerMatch = Math.min(
+      annual401kContribution,
+      personalData.currentSalary * personalData.match401k / 100
+    );
+    const total401kContribution = annual401kContribution + employerMatch;
+
+    // Calculate monthly investment contributions (non-401k)
+    const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
+
+    // Apply investment growth to existing portfolio
+    // Use stock market growth rate from economic simulation
+    const investmentGrowthRate = newEconomicState.stockMarketGrowth;
+    const previousInvestmentValue = currentInvestmentValueRef.current; // Use ref instead of state
     
+    // Calculate new investment value: previous value grows + new contributions
+    let newInvestmentValue = (previousInvestmentValue * (1 + investmentGrowthRate)) + 
+                        total401kContribution + annualMonthlyInvestments;
+
+    // Update the ref with the new value
+    currentInvestmentValueRef.current = newInvestmentValue;
+
+    // Calculate net worth
     const calculatedNetWorth = updatedSavings + newInvestmentValue;
 
-    // Update net worth with proper calculation
+    // Single setFinancials call to update both investment value and net worth
     setFinancials(prev => ({
       ...prev,
+      investmentAccountValue: newInvestmentValue,
+      investments: newInvestmentValue, // Keep both for compatibility
       netWorth: calculatedNetWorth,
       currentSalary: personalData.currentSalary,
       annualExpenses: updatedAnnualExpenses // Update expenses for inflation
@@ -338,6 +339,9 @@ export const LifeSimulator: React.FC = () => {
       
       // Store the original salary value before any inflation adjustments
       originalSalaryRef.current = personalData.currentSalary;
+      
+      // Initialize investment ref with current investment value
+      currentInvestmentValueRef.current = financials.investmentAccountValue;
       
       setSimulationProgress(prev => ({
         ...prev,
@@ -601,6 +605,88 @@ export const LifeSimulator: React.FC = () => {
     setCurrentMode('selection');
   };
 
+  // Developer autofill for testing (only in development)
+  const handleDeveloperAutofill = () => {
+    if (process.env.NODE_ENV !== 'development') return;
+    
+    const testScenarios = [
+      {
+        age: 25,
+        currentSalary: 65000,
+        state: 'California',
+        careerField: 'Tech' as const,
+        match401k: 4,
+        contributions401kTraditional: 10,
+        contributions401kRoth: 5,
+        savings: 15000,
+        investments: 5000,
+        debtAmount: 25000,
+        debtInterestRate: 4.5,
+        retirementAge: 65,
+        retirementGoal: 1500000,
+        monthlyInvestment: 800
+      },
+      {
+        age: 35,
+        currentSalary: 85000,
+        state: 'Texas',
+        careerField: 'Government' as const,
+        match401k: 5,
+        contributions401kTraditional: 15,
+        contributions401kRoth: 0,
+        savings: 45000,
+        investments: 35000,
+        debtAmount: 15000,
+        debtInterestRate: 3.2,
+        retirementAge: 62,
+        retirementGoal: 1200000,
+        monthlyInvestment: 1200
+      },
+      {
+        age: 22,
+        currentSalary: 45000,
+        state: 'Florida',
+        careerField: 'Service' as const,
+        match401k: 3,
+        contributions401kTraditional: 8,
+        contributions401kRoth: 2,
+        savings: 8000,
+        investments: 2000,
+        debtAmount: 35000,
+        debtInterestRate: 6.8,
+        retirementAge: 67,
+        retirementGoal: 800000,
+        monthlyInvestment: 300
+      }
+    ];
+    
+    const randomScenario = testScenarios[Math.floor(Math.random() * testScenarios.length)];
+    setPersonalData(prev => ({
+      ...prev,
+      ...randomScenario,
+      // Keep existing fields that aren't in the test scenario
+      contributions401k: 0,
+      contribution401kType: 'traditional' as const,
+      cashBonus: Math.floor(Math.random() * 10000),
+      stockBonus: Math.floor(Math.random() * 15000),
+      emergencyFundMonths: 6,
+      riskTolerance: 'moderate' as const,
+      plannedPurchases: []
+    }));
+    
+    // Set financials to match
+    setFinancials(prev => ({
+      ...prev,
+      currentSalary: randomScenario.currentSalary
+    }));
+    
+    // Mark setup as completed and stay in personal mode
+    setSetupCompleted(true);
+    setCurrentMode('personal');
+    
+    console.log('🔧 Developer autofill applied:', randomScenario);
+  };
+
   // Rent management functions
   const getCurrentRent = (state: string): number => {
     // If user has custom rent data, use that (already inflation-adjusted during simulation)
@@ -833,6 +919,11 @@ export const LifeSimulator: React.FC = () => {
 
   // Update financials effect
   useEffect(() => {
+    // Skip this effect entirely during simulation to avoid interfering with simulation calculations
+    if (hasStarted) {
+      return;
+    }
+
     const annualExpenses = calculateAnnualExpenses();
     
     // Calculate proper net worth: Assets - Liabilities
@@ -845,7 +936,7 @@ export const LifeSimulator: React.FC = () => {
       annualExpenses: annualExpenses,
       netWorth: netWorth
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted]);
+  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, financials.investmentAccountValue]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -1138,6 +1229,24 @@ export const LifeSimulator: React.FC = () => {
           </div>
         </div>
       </div>
+    );
+  };
+
+  const renderNetWorthPage = () => {
+    return (
+      <NetWorthPage
+        personalData={personalData}
+        financials={financials}
+        hasStarted={hasStarted}
+        simulationState={simulationState}
+        simulationProgress={simulationProgress}
+        historicalData={historicalData}
+        setCurrentMode={setCurrentMode}
+        onStart={startSimulation}
+        onPause={pauseSimulation}
+        onReset={resetSimulation}
+        onEditProfile={handleEditProfile}
+      />
     );
   };
 
@@ -1704,7 +1813,9 @@ export const LifeSimulator: React.FC = () => {
   };
 
   const renderSelectionPage = () => (
-    <ModeSelectionPage setCurrentMode={setCurrentMode} />
+    <ModeSelectionPage 
+      setCurrentMode={setCurrentMode} 
+    />
   );
 
   // Setup wizard for personal mode
@@ -1719,6 +1830,7 @@ export const LifeSimulator: React.FC = () => {
         setCurrentMode={setCurrentMode}
         setFinancials={setFinancials}
         originalSalaryRef={originalSalaryRef}
+        onDeveloperAutofill={handleDeveloperAutofill}
       />
     );
   };
@@ -2743,6 +2855,8 @@ export const LifeSimulator: React.FC = () => {
         return renderExpensesPage();
       case 'investments':
         return renderInvestmentsPage();
+      case 'networth':
+        return renderNetWorthPage();
       case 'economy':
         return renderEconomyPage();
       case 'realistic':
