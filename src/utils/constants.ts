@@ -19,6 +19,21 @@ export const RETIREMENT_CONFIG = {
   MEDICARE_ADDITIONAL_THRESHOLD: 200000
 };
 
+// Function to get 401k contribution limit by year
+export const get401kLimit = (year?: number): number => {
+  const currentYear = year || new Date().getFullYear();
+  const baseYear = RETIREMENT_CONFIG.BASE_YEAR;
+  const baseLimit = RETIREMENT_CONFIG.BASE_401K_LIMIT;
+  const annualIncrease = RETIREMENT_CONFIG.ANNUAL_INCREASE;
+  
+  if (currentYear < baseYear) {
+    // For years before 2025, use historical limits or approximate
+    return baseLimit - (annualIncrease * (baseYear - currentYear));
+  }
+  
+  return baseLimit + (annualIncrease * (currentYear - baseYear));
+};
+
 // Tax rates
 export const TAX_RATES = {
   SOCIAL_SECURITY: 0.062,
@@ -50,10 +65,12 @@ export const ECONOMIC_TRANSITIONS = {
     depression: 0.02
   },
   recession: {
-    trough: 0.5,
-    vShapedRecovery: 0.3,
-    extendedRecession: 0.19,
-    depression: 0.01
+    trough: 0.4,
+    recovery: 0.35,
+    deeperRecession: 0.2,
+    depression: 0.05,
+    vShapedRecovery: 0.15,
+    extendedRecession: 0.10
   },
   trough: {
     expansion: 0.8,
@@ -61,193 +78,302 @@ export const ECONOMIC_TRANSITIONS = {
   },
   depression: {
     trough: 0.6,
-    extendedDepression: 0.3,
-    directRecovery: 0.1
+    recovery: 0.3,
+    continueDepression: 0.1,
+    extendedDepression: 0.05
   }
 };
+
+// Stock market volatility by economic cycle
+export const STOCK_MARKET_VOLATILITY = {
+  expansion: { min: 0.05, max: 0.15 },
+  peak: { min: 0.10, max: 0.20 },
+  recession: { min: 0.20, max: 0.40 },
+  trough: { min: 0.15, max: 0.30 },
+  depression: { min: 0.30, max: 0.50 }
+};
+
+// Market volatility (alias for compatibility)
+export const MARKET_VOLATILITY = STOCK_MARKET_VOLATILITY;
 
 // Inflation rates by economic cycle
 export const INFLATION_BY_CYCLE = {
-  expansion: { base: 0.025, variance: 0.02 }, // 2.5-4.5%
-  peak: { base: 0.025, variance: 0.03 }, // 2.5-5.5%
-  recession: { base: 0.025, variance: -0.015 }, // 1.0-2.5%
-  trough: { base: 0.025, variance: -0.02 }, // 0.5-2.5%
-  depression: { base: 0.025, variance: -0.05 } // -2% to 2.5%
+  expansion: { min: 0.02, max: 0.04 },
+  peak: { min: 0.03, max: 0.06 },
+  recession: { min: -0.01, max: 0.02 },
+  trough: { min: -0.02, max: 0.01 },
+  depression: { min: -0.05, max: -0.01 }
 };
 
-// Stock market growth by economic cycle
+// Stock growth rates by economic cycle
 export const STOCK_GROWTH_BY_CYCLE = {
-  expansion: { base: 0.12, variance: 0.08 }, // 12-20%
-  peak: { base: 0.05, variance: 0.10 }, // 5-15%
-  recession: { base: -0.15, variance: 0.10 }, // -15% to -5%
-  trough: { base: -0.10, variance: 0.15 }, // -10% to +5%
-  depression: { base: -0.40, variance: 0.15 } // -40% to -25%
+  expansion: { min: 0.08, max: 0.15 },
+  peak: { min: 0.05, max: 0.12 },
+  recession: { min: -0.30, max: 0.05 },
+  trough: { min: -0.20, max: 0.08 },
+  depression: { min: -0.50, max: -0.10 }
 };
 
-// Market volatility
-export const MARKET_VOLATILITY = 0.20; // 20%
+// Investment returns by risk tolerance
+export const INVESTMENT_RETURNS = {
+  conservative: {
+    base: 0.04,
+    volatility: 0.05
+  },
+  moderate: {
+    base: 0.07,
+    volatility: 0.10
+  },
+  aggressive: {
+    base: 0.10,
+    volatility: 0.18
+  }
+};
 
-// Salary inflation adjustment factor
-export const SALARY_INFLATION_FACTOR = 0.8; // 80% of inflation
-
-// Federal tax brackets for 2025 (single filer)
+// Federal tax brackets for 2025 (approximate)
 export const FEDERAL_TAX_BRACKETS: FederalTaxBracket[] = [
-  { min: 0, max: 11925, rate: 0.10 },
-  { min: 11925, max: 48475, rate: 0.12 },
-  { min: 48475, max: 103350, rate: 0.22 },
-  { min: 103350, max: 197300, rate: 0.24 },
-  { min: 197300, max: 250525, rate: 0.32 },
-  { min: 250525, max: 626350, rate: 0.35 },
+  { min: 0, max: 14200, rate: 0.10 },
+  { min: 14200, max: 54550, rate: 0.12 },
+  { min: 54550, max: 116675, rate: 0.22 },
+  { min: 116675, max: 204400, rate: 0.24 },
+  { min: 204400, max: 273200, rate: 0.32 },
+  { min: 273200, max: 626350, rate: 0.35 },
   { min: 626350, max: Infinity, rate: 0.37 }
 ];
 
-// State tax rates (simplified average rates)
+// State income tax rates (approximate)
 export const STATE_TAX_RATES: StateCostData = {
-  'Alabama': 0.035, 'Alaska': 0, 'Arizona': 0.025, 'Arkansas': 0.0295, 'California': 0.067,
-  'Colorado': 0.044, 'Connecticut': 0.045, 'Delaware': 0.044, 'District of Columbia': 0.074,
-  'Florida': 0, 'Georgia': 0.0539, 'Hawaii': 0.062, 'Idaho': 0.05695, 'Illinois': 0.0495,
-  'Indiana': 0.03, 'Iowa': 0.038, 'Kansas': 0.054, 'Kentucky': 0.04, 'Louisiana': 0.03,
-  'Maine': 0.065, 'Maryland': 0.039, 'Massachusetts': 0.07, 'Michigan': 0.0425,
-  'Minnesota': 0.076, 'Mississippi': 0.044, 'Missouri': 0.035, 'Montana': 0.053,
-  'Nebraska': 0.038, 'Nevada': 0, 'New Hampshire': 0, 'New Jersey': 0.061, 'New Mexico': 0.037,
-  'New York': 0.075, 'North Carolina': 0.0425, 'North Dakota': 0.0225, 'Ohio': 0.031,
-  'Oklahoma': 0.025, 'Oregon': 0.073, 'Pennsylvania': 0.0307, 'Rhode Island': 0.049,
-  'South Carolina': 0.031, 'South Dakota': 0, 'Tennessee': 0, 'Texas': 0, 'Utah': 0.0455,
-  'Vermont': 0.061, 'Virginia': 0.039, 'Washington': 0, 'West Virginia': 0.035,
-  'Wisconsin': 0.056, 'Wyoming': 0
+  'Alabama': 0.05,
+  'Alaska': 0.00,
+  'Arizona': 0.045,
+  'Arkansas': 0.065,
+  'California': 0.133,
+  'Colorado': 0.0455,
+  'Connecticut': 0.069,
+  'Delaware': 0.066,
+  'Florida': 0.00,
+  'Georgia': 0.0575,
+  'Hawaii': 0.11,
+  'Idaho': 0.0695,
+  'Illinois': 0.0495,
+  'Indiana': 0.0323,
+  'Iowa': 0.0853,
+  'Kansas': 0.057,
+  'Kentucky': 0.05,
+  'Louisiana': 0.06,
+  'Maine': 0.0715,
+  'Maryland': 0.0575,
+  'Massachusetts': 0.05,
+  'Michigan': 0.0425,
+  'Minnesota': 0.0985,
+  'Mississippi': 0.05,
+  'Missouri': 0.054,
+  'Montana': 0.069,
+  'Nebraska': 0.0684,
+  'Nevada': 0.00,
+  'New Hampshire': 0.05,
+  'New Jersey': 0.1075,
+  'New Mexico': 0.059,
+  'New York': 0.1082,
+  'North Carolina': 0.0475,
+  'North Dakota': 0.029,
+  'Ohio': 0.039,
+  'Oklahoma': 0.05,
+  'Oregon': 0.099,
+  'Pennsylvania': 0.0307,
+  'Rhode Island': 0.0599,
+  'South Carolina': 0.07,
+  'South Dakota': 0.00,
+  'Tennessee': 0.00,
+  'Texas': 0.00,
+  'Utah': 0.0495,
+  'Vermont': 0.0875,
+  'Virginia': 0.0575,
+  'Washington': 0.00,
+  'West Virginia': 0.065,
+  'Wisconsin': 0.0765,
+  'Wyoming': 0.00
 };
 
-// State rent data (average monthly rent by state)
+// State rent cost data (average monthly rent)
 export const STATE_RENT_DATA: StateCostData = {
-  'Massachusetts': 2837,
-  'New York': 2739,
-  'Hawaii': 2668,
-  'California': 2587,
-  'District of Columbia': 2474,
-  'New Jersey': 2337,
-  'Vermont': 2152,
-  'Rhode Island': 2129,
-  'New Hampshire': 2112,
-  'Connecticut': 2044,
-  'Washington': 2020,
-  'Virginia': 1972,
-  'Maine': 1971,
-  'Florida': 1955,
-  'Illinois': 1944,
-  'Colorado': 1884,
-  'Maryland': 1859,
-  'Oregon': 1757,
-  'Pennsylvania': 1730,
-  'Delaware': 1646,
-  'Georgia': 1608,
-  'Idaho': 1607,
-  'Montana': 1605,
-  'Utah': 1597,
-  'South Carolina': 1594,
-  'Arizona': 1575,
-  'Minnesota': 1558,
-  'Wisconsin': 1548,
-  'Nevada': 1525,
-  'North Carolina': 1524,
-  'Tennessee': 1494,
-  'Alaska': 1482,
-  'Texas': 1449,
-  'New Mexico': 1389,
-  'Michigan': 1346,
-  'Wyoming': 1332,
-  'Mississippi': 1305,
-  'Indiana': 1293,
-  'Alabama': 1288,
-  'Kentucky': 1287,
-  'Nebraska': 1285,
-  'Ohio': 1279,
-  'West Virginia': 1275,
-  'Missouri': 1273,
-  'Kansas': 1243,
-  'Louisiana': 1235,
-  'Iowa': 1220,
-  'South Dakota': 1127,
-  'Arkansas': 1093,
-  'North Dakota': 1077,
-  'Oklahoma': 1035
+  'Alabama': 800,
+  'Alaska': 1200,
+  'Arizona': 1100,
+  'Arkansas': 700,
+  'California': 2800,
+  'Colorado': 1500,
+  'Connecticut': 1600,
+  'Delaware': 1300,
+  'Florida': 1400,
+  'Georgia': 1100,
+  'Hawaii': 2200,
+  'Idaho': 900,
+  'Illinois': 1200,
+  'Indiana': 800,
+  'Iowa': 700,
+  'Kansas': 800,
+  'Kentucky': 700,
+  'Louisiana': 900,
+  'Maine': 1000,
+  'Maryland': 1700,
+  'Massachusetts': 2100,
+  'Michigan': 900,
+  'Minnesota': 1100,
+  'Mississippi': 700,
+  'Missouri': 800,
+  'Montana': 900,
+  'Nebraska': 800,
+  'Nevada': 1200,
+  'New Hampshire': 1200,
+  'New Jersey': 1800,
+  'New Mexico': 900,
+  'New York': 2400,
+  'North Carolina': 1000,
+  'North Dakota': 800,
+  'Ohio': 800,
+  'Oklahoma': 700,
+  'Oregon': 1400,
+  'Pennsylvania': 1100,
+  'Rhode Island': 1300,
+  'South Carolina': 900,
+  'South Dakota': 700,
+  'Tennessee': 900,
+  'Texas': 1200,
+  'Utah': 1100,
+  'Vermont': 1200,
+  'Virginia': 1300,
+  'Washington': 1600,
+  'West Virginia': 600,
+  'Wisconsin': 900,
+  'Wyoming': 800
 };
 
-// State grocery data (average weekly grocery costs by state)
+// State grocery cost data (monthly average per person)
 export const STATE_GROCERY_DATA: StateCostData = {
-  'Hawaii': 333.88,
-  'Alaska': 328.71,
-  'California': 297.72,
-  'Nevada': 294.76,
-  'Mississippi': 290.64,
-  'Washington': 287.67,
-  'Florida': 287.27,
-  'New Mexico': 286.39,
-  'Texas': 286.19,
-  'Louisiana': 282.95,
-  'Colorado': 279.98,
-  'Oklahoma': 279.16,
-  'Utah': 278.41,
-  'Georgia': 278.32,
-  'New Jersey': 274.69,
-  'Massachusetts': 271.98,
-  'Arizona': 271.84,
-  'Alabama': 271.64,
-  'Tennessee': 270.45,
-  'Illinois': 269.47,
-  'New York': 266.40,
-  'North Carolina': 266.23,
-  'Maryland': 266.11,
-  'Connecticut': 265.90,
-  'North Dakota': 265.11,
-  'Arkansas': 260.91,
-  'Virginia': 259.76,
-  'Idaho': 257.54,
-  'South Dakota': 256.48,
-  'Rhode Island': 255.86,
-  'District of Columbia': 254.70,
-  'Kentucky': 254.57,
-  'South Carolina': 254.36,
-  'Wyoming': 254.24,
-  'Ohio': 253.74,
-  'Kansas': 250.88,
-  'Minnesota': 250.56,
-  'Maine': 249.91,
-  'Oregon': 249.38,
-  'Vermont': 249.38,
-  'Pennsylvania': 249.09,
-  'Montana': 246.42,
-  'Delaware': 246.21,
-  'Missouri': 244.43,
-  'New Hampshire': 239.33,
-  'West Virginia': 239.24,
-  'Indiana': 239.11,
-  'Michigan': 236.38,
-  'Nebraska': 235.12,
-  'Iowa': 227.32,
-  'Wisconsin': 221.46
+  'Alabama': 300,
+  'Alaska': 450,
+  'Arizona': 320,
+  'Arkansas': 280,
+  'California': 400,
+  'Colorado': 350,
+  'Connecticut': 380,
+  'Delaware': 340,
+  'Florida': 320,
+  'Georgia': 310,
+  'Hawaii': 500,
+  'Idaho': 300,
+  'Illinois': 330,
+  'Indiana': 290,
+  'Iowa': 280,
+  'Kansas': 290,
+  'Kentucky': 280,
+  'Louisiana': 300,
+  'Maine': 350,
+  'Maryland': 370,
+  'Massachusetts': 390,
+  'Michigan': 310,
+  'Minnesota': 320,
+  'Mississippi': 280,
+  'Missouri': 290,
+  'Montana': 320,
+  'Nebraska': 290,
+  'Nevada': 330,
+  'New Hampshire': 350,
+  'New Jersey': 380,
+  'New Mexico': 300,
+  'New York': 400,
+  'North Carolina': 300,
+  'North Dakota': 310,
+  'Ohio': 300,
+  'Oklahoma': 280,
+  'Oregon': 350,
+  'Pennsylvania': 320,
+  'Rhode Island': 360,
+  'South Carolina': 290,
+  'South Dakota': 280,
+  'Tennessee': 290,
+  'Texas': 310,
+  'Utah': 320,
+  'Vermont': 370,
+  'Virginia': 330,
+  'Washington': 360,
+  'West Virginia': 270,
+  'Wisconsin': 310,
+  'Wyoming': 320
 };
 
-// Simulation timing
-export const SIMULATION_CONFIG = {
-  YEAR_DURATION_MS: 5000, // 5 seconds per year
-  DAYS_PER_YEAR: 365,
-  MONTHS_PER_YEAR: 12,
-  WEEKS_PER_YEAR: 52
-};
-
-// Career action multipliers
-export const CAREER_ACTIONS = {
-  PROMOTION_INCREASE: 0.15, // 15%
-  DEMOTION_DECREASE: 0.10, // 10%
-  MAX_RECENT_EVENTS: 5
-};
-
-// Default values
-export const DEFAULTS = {
-  PERSONAL_DATA: {
-    retirementAge: 65,
-    retirementGoal: 1000000,
-    emergencyFundMonths: 6,
-    riskTolerance: 'moderate' as const
+// Life events that can occur during simulation
+export const LIFE_EVENTS = [
+  {
+    id: 'job_promotion',
+    name: 'Job Promotion',
+    probability: 0.15, // 15% chance per year
+    salaryIncrease: { min: 0.10, max: 0.25 },
+    description: 'You received a promotion with a salary increase!'
+  },
+  {
+    id: 'job_loss',
+    name: 'Job Loss',
+    probability: 0.05, // 5% chance per year
+    salaryIncrease: { min: -1.0, max: -1.0 }, // 100% salary loss
+    duration: { min: 3, max: 12 }, // 3-12 months to find new job
+    description: 'You lost your job and need to find new employment.'
+  },
+  {
+    id: 'market_crash',
+    name: 'Market Crash',
+    probability: 0.08, // 8% chance per year
+    investmentImpact: { min: -0.40, max: -0.20 },
+    description: 'A major market crash affected your investments.'
+  },
+  {
+    id: 'market_boom',
+    name: 'Market Boom',
+    probability: 0.10, // 10% chance per year
+    investmentImpact: { min: 0.15, max: 0.35 },
+    description: 'A market boom significantly increased your investments!'
+  },
+  {
+    id: 'medical_expense',
+    name: 'Major Medical Expense',
+    probability: 0.12, // 12% chance per year
+    expenseAmount: { min: 5000, max: 50000 },
+    description: 'An unexpected medical expense occurred.'
+  },
+  {
+    id: 'home_repair',
+    name: 'Major Home Repair',
+    probability: 0.08, // 8% chance per year
+    expenseAmount: { min: 3000, max: 25000 },
+    description: 'Your home needed a major repair.'
   }
-};
+];
+
+// Achievement system
+export const ACHIEVEMENTS = [
+  {
+    id: 'emergency_fund',
+    name: 'Emergency Fund Champion',
+    description: 'Build an emergency fund of 6 months expenses',
+    condition: 'emergency_fund_complete'
+  },
+  {
+    id: 'debt_free',
+    name: 'Debt Free Hero',
+    description: 'Pay off all debt',
+    condition: 'zero_debt'
+  },
+  {
+    id: 'millionaire',
+    name: 'Millionaire',
+    description: 'Reach a net worth of $1,000,000',
+    condition: 'net_worth_million'
+  },
+  {
+    id: 'retirement_ready',
+    name: 'Retirement Ready',
+    description: 'Reach your retirement goal',
+    condition: 'retirement_goal_met'
+  }
+];

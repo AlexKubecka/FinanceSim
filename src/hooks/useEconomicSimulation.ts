@@ -133,7 +133,7 @@ export const useEconomicSimulation = () => {
     
     // Calculate inflation based on economic cycle
     const inflationConfig = INFLATION_BY_CYCLE[newEconomic.economicCycle];
-    newEconomic.currentInflationRate = inflationConfig.base + (Math.random() * inflationConfig.variance);
+    newEconomic.currentInflationRate = inflationConfig.min + (Math.random() * (inflationConfig.max - inflationConfig.min));
     
     // Ensure inflation doesn't go below -2% (severe deflation cap)
     newEconomic.currentInflationRate = Math.max(-0.02, newEconomic.currentInflationRate);
@@ -143,10 +143,11 @@ export const useEconomicSimulation = () => {
     
     // Calculate stock market growth based on economic cycle (S&P 500 equivalent)
     const stockConfig = STOCK_GROWTH_BY_CYCLE[newEconomic.economicCycle];
-    let stockGrowth = stockConfig.base + (Math.random() * stockConfig.variance);
+    let stockGrowth = stockConfig.min + (Math.random() * (stockConfig.max - stockConfig.min));
     
     // Add some random volatility (monthly variations averaged over the year)
-    const randomFactor = (Math.random() - 0.5) * MARKET_VOLATILITY;
+    const volatilityConfig = MARKET_VOLATILITY[newEconomic.economicCycle];
+    const randomFactor = (Math.random() - 0.5) * (volatilityConfig.max - volatilityConfig.min);
     const actualGrowthRate = stockGrowth + randomFactor;
     
     // Calculate the new stock market index value

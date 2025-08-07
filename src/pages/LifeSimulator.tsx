@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Square, BarChart3, TrendingUp, DollarSign, User, Target, Receipt, Globe } from 'lucide-react';
 import { SimulationControls } from '../components/SimulationControls';
+// import InvestmentPage from '../components/InvestmentPage';
 
 // Add Edit3 icon for the edit button
 
