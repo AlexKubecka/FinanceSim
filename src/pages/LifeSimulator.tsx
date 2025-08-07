@@ -7,16 +7,13 @@ import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { get401kLimit } from '../utils/financialCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
-import { calculateTaxes } from '../services/taxCalculation';
 import { 
   SimulationMode, 
   SimulationState, 
   PersonalFinancialData, 
   SimulationProgress, 
   HistoricalDataPoint, 
-  EconomicState, 
-  FinancialState,
-  EventNotification 
+  EconomicState
 } from '../types/simulation';
 // import InvestmentPage from '../components/InvestmentPage';
 
