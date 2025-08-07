@@ -5,84 +5,22 @@ import { Dashboard } from '../components/Dashboard';
 import { SetupWizard } from '../components/SetupWizard';
 import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { get401kLimit } from '../utils/financialCalculations';
+import { stateRentData, stateGroceryData } from '../utils/expenseData';
+import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
+import { calculateTaxes } from '../services/taxCalculation';
+import { 
+  SimulationMode, 
+  SimulationState, 
+  PersonalFinancialData, 
+  SimulationProgress, 
+  HistoricalDataPoint, 
+  EconomicState, 
+  FinancialState,
+  EventNotification 
+} from '../types/simulation';
 // import InvestmentPage from '../components/InvestmentPage';
 
 // Add Edit3 icon for the edit button
-
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy';
-
-interface PersonalFinancialData {
-  // Basic Info
-  age: number;
-  currentSalary: number;
-  state: string;
-  
-  // Career details
-  careerField: 'Tech' | 'Government' | 'Service' | '';
-  match401k: number; // percentage (0-100)
-  contributions401k: number; // percentage (0-100) - DEPRECATED: keeping for backward compatibility
-  contributions401kTraditional: number; // percentage (0-100)
-  contributions401kRoth: number; // percentage (0-100)
-  contribution401kType: 'traditional' | 'roth'; // DEPRECATED: keeping for backward compatibility
-  cashBonus: number;
-  stockBonus: number;
-  
-  // Assets
-  savings: number;
-  investments: number;
-  
-  // Debts
-  debtAmount: number;
-  debtInterestRate: number;
-  
-  // Goals
-  retirementAge: number;
-  retirementGoal: number;
-  emergencyFundMonths: number;
-  
-  // Investment settings
-  riskTolerance: 'conservative' | 'moderate' | 'aggressive';
-  monthlyInvestment: number;
-  
-  // Life events
-  plannedPurchases: {
-    item: string;
-    cost: number;
-    targetYear: number;
-  }[];
-}
-
-type SimulationState = 'setup' | 'running' | 'paused' | 'completed';
-
-interface SimulationProgress {
-  currentDate: Date;
-  startDate: Date;
-  currentAge: number;
-  yearsElapsed: number;
-  monthsElapsed: number;
-  daysElapsed: number;
-  speedMultiplier: number;
-}
-
-interface HistoricalDataPoint {
-  age: number;
-  netWorth: number;
-  salary: number;
-  investments: number;
-  debt: number;
-  timestamp: Date;
-  inflation: number;
-  stockMarketValue: number;
-}
-
-interface EconomicState {
-  currentInflationRate: number; // Annual inflation rate (e.g., 0.03 for 3%)
-  cumulativeInflation: number; // Total inflation since start (multiplier)
-  stockMarketIndex: number; // Stock market index value (starts at 100)
-  stockMarketGrowth: number; // Annual growth rate
-  economicCycle: 'expansion' | 'peak' | 'recession' | 'trough' | 'depression'; // Economic cycle phase
-  yearsInCurrentCycle: number; // How long in current cycle
-}
 
 export const LifeSimulator: React.FC = () => {
   const [currentMode, setCurrentMode] = useState<SimulationMode>('selection');
@@ -126,14 +64,7 @@ export const LifeSimulator: React.FC = () => {
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
 
   // Economic state
-  const [economicState, setEconomicState] = useState<EconomicState>({
-    currentInflationRate: 0.025, // Start with 2.5% inflation
-    cumulativeInflation: 1.0, // No inflation yet
-    stockMarketIndex: 5000, // Start at S&P 500-like level
-    stockMarketGrowth: 0.10, // 10% average annual growth (including dividends)
-    economicCycle: 'expansion',
-    yearsInCurrentCycle: 0
-  });
+  const [economicState, setEconomicState] = useState<EconomicState>(createInitialEconomicState());
 
   // Track previous year's stock market value for year-over-year growth calculation
   // Use a ref to track the current stock market value for immediate updates
@@ -194,205 +125,6 @@ export const LifeSimulator: React.FC = () => {
   const [tempGroceryValue, setTempGroceryValue] = useState<string>('');
 
   const intervalRef = useRef<number | null>(null);
-
-  // Economic simulation function
-  const simulateEconomicStep = (currentEconomic: EconomicState, previousYearIndex: number): EconomicState => {
-    let newEconomic = { ...currentEconomic };
-    
-    // Update years in current cycle FIRST
-    newEconomic.yearsInCurrentCycle += 1;
-    
-    // Economic cycle transitions (realistic business cycle with multiple possible paths)
-    // Note: For testing, you can temporarily reduce these durations
-    // Use the NEW years count for transition checks
-    switch (currentEconomic.economicCycle) {
-      case 'expansion':
-        // Normal: 6-10 years, Testing: 2-4 years
-        if (newEconomic.yearsInCurrentCycle >= 2 + Math.random() * 2) { // Shortened for testing
-          const transitionRoll = Math.random();
-          if (transitionRoll < 0.7) {
-            // 70% chance: Normal progression to peak
-            newEconomic.economicCycle = 'peak';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: expansion → peak');
-          } else if (transitionRoll < 0.9) {
-            // 20% chance: Extended expansion (reset cycle)
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: expansion → extended expansion');
-          } else {
-            // 10% chance: Sudden recession (economic shock)
-            newEconomic.economicCycle = 'recession';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: expansion → sudden recession');
-          }
-        }
-        break;
-      case 'peak':
-        if (newEconomic.yearsInCurrentCycle >= 1) {
-          const transitionRoll = Math.random();
-          if (transitionRoll < 0.55) {
-            // 55% chance: Normal progression to recession
-            newEconomic.economicCycle = 'recession';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: peak → recession');
-          } else if (transitionRoll < 0.85) {
-            // 30% chance: Back to expansion (soft landing)
-            newEconomic.economicCycle = 'expansion';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: peak → soft landing to expansion');
-          } else if (transitionRoll < 0.98) {
-            // 13% chance: Extended peak
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: peak → extended peak');
-          } else {
-            // 2% chance: Severe depression (very rare)
-            newEconomic.economicCycle = 'depression';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: peak → severe depression (rare event)');
-          }
-        }
-        break;
-      case 'recession':
-        if (newEconomic.yearsInCurrentCycle >= 1 + Math.random() * 2) { // 1-3 years
-          const transitionRoll = Math.random();
-          if (transitionRoll < 0.5) {
-            // 50% chance: Normal progression to trough
-            newEconomic.economicCycle = 'trough';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: recession → trough');
-          } else if (transitionRoll < 0.8) {
-            // 30% chance: Direct recovery to expansion (V-shaped recovery)
-            newEconomic.economicCycle = 'expansion';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: recession → V-shaped recovery to expansion');
-          } else if (transitionRoll < 0.99) {
-            // 19% chance: Extended recession
-            newEconomic.yearsInCurrentCycle = Math.max(0, newEconomic.yearsInCurrentCycle - 1);
-            console.log('🔄 Economic cycle transition: recession → extended recession');
-          } else {
-            // 1% chance: Recession deepens to depression (very rare)
-            newEconomic.economicCycle = 'depression';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: recession → depression (rare deepening)');
-          }
-        }
-        break;
-      case 'trough':
-        if (newEconomic.yearsInCurrentCycle >= 1) {
-          const transitionRoll = Math.random();
-          if (transitionRoll < 0.8) {
-            // 80% chance: Normal progression to expansion
-            newEconomic.economicCycle = 'expansion';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: trough → expansion');
-          } else {
-            // 20% chance: Extended trough (prolonged stagnation)
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: trough → extended trough');
-          }
-        }
-        break;
-      case 'depression':
-        if (newEconomic.yearsInCurrentCycle >= 2 + Math.random() * 3) { // 2-5 years
-          const transitionRoll = Math.random();
-          if (transitionRoll < 0.6) {
-            // 60% chance: Slow recovery to trough
-            newEconomic.economicCycle = 'trough';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: depression → trough (slow recovery)');
-          } else if (transitionRoll < 0.9) {
-            // 30% chance: Extended depression
-            newEconomic.yearsInCurrentCycle = Math.max(0, newEconomic.yearsInCurrentCycle - 1);
-            console.log('🔄 Economic cycle transition: depression → extended depression');
-          } else {
-            // 10% chance: Direct recovery to expansion (rare but possible)
-            newEconomic.economicCycle = 'expansion';
-            newEconomic.yearsInCurrentCycle = 0;
-            console.log('🔄 Economic cycle transition: depression → direct recovery to expansion');
-          }
-        }
-        break;
-    }
-    
-    // Calculate inflation based on economic cycle
-    let baseInflation = 0.025; // 2.5% base
-    switch (newEconomic.economicCycle) {
-      case 'expansion':
-        newEconomic.currentInflationRate = baseInflation + (Math.random() * 0.02); // 2.5-4.5%
-        break;
-      case 'peak':
-        newEconomic.currentInflationRate = baseInflation + (Math.random() * 0.03); // 2.5-5.5%
-        break;
-      case 'recession':
-        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.015)); // 1.0-2.5%
-        break;
-      case 'trough':
-        newEconomic.currentInflationRate = Math.max(0, baseInflation - (Math.random() * 0.02)); // 0.5-2.5%
-        break;
-      case 'depression':
-        newEconomic.currentInflationRate = Math.max(-0.02, baseInflation - (Math.random() * 0.05)); // -2% to 2.5% (deflation possible)
-        break;
-    }
-    
-    // Update cumulative inflation
-    newEconomic.cumulativeInflation *= (1 + newEconomic.currentInflationRate);
-    
-    // Calculate stock market growth based on economic cycle (S&P 500 equivalent)
-    let stockGrowth = 0.10; // 10% base annual growth (including dividends)
-    let volatility = 0.20; // 20% volatility (more realistic for stocks)
-    
-    switch (newEconomic.economicCycle) {
-      case 'expansion':
-        stockGrowth = 0.12 + (Math.random() * 0.08); // 12-20% (bull market)
-        break;
-      case 'peak':
-        stockGrowth = 0.05 + (Math.random() * 0.10); // 5-15% (volatile)
-        break;
-      case 'recession':
-        stockGrowth = -0.15 + (Math.random() * 0.10); // -15% to -5% (moderate bear market)
-        break;
-      case 'trough':
-        stockGrowth = -0.10 + (Math.random() * 0.15); // -10% to +5% (recovery)
-        break;
-      case 'depression':
-        stockGrowth = -0.40 + (Math.random() * 0.15); // -40% to -25% (severe bear market)
-        break;
-    }
-    
-    // Add some random volatility (monthly variations averaged over the year)
-    const randomFactor = (Math.random() - 0.5) * volatility;
-    const actualGrowthRate = stockGrowth + randomFactor;
-    
-    // Calculate the new stock market index value
-    const newStockMarketIndex = currentEconomic.stockMarketIndex * (1 + actualGrowthRate);
-    
-    // Calculate year-over-year growth based on previous year's index
-    newEconomic.stockMarketGrowth = previousYearIndex > 0 
-      ? (newStockMarketIndex - previousYearIndex) / previousYearIndex
-      : actualGrowthRate;
-    
-    // Debug logging for economic cycle and stock market calculation
-    console.log('Economic Cycle Debug:', {
-      previousCycle: currentEconomic.economicCycle,
-      newCycle: newEconomic.economicCycle,
-      yearsInCycle: newEconomic.yearsInCurrentCycle,
-      transitionTriggered: currentEconomic.economicCycle !== newEconomic.economicCycle
-    });
-    
-    console.log('Stock Market Debug:', {
-      previousYearIndex,
-      currentStockIndex: currentEconomic.stockMarketIndex,
-      newStockMarketIndex,
-      actualGrowthRate,
-      calculatedYoYGrowth: newEconomic.stockMarketGrowth,
-      economicCycle: newEconomic.economicCycle
-    });
-    
-    // Update stock market index
-    newEconomic.stockMarketIndex = newStockMarketIndex;
-    
-    return newEconomic;
-  };
 
   // Main simulation step function
   const runSimulationStep = () => {
@@ -870,116 +602,6 @@ export const LifeSimulator: React.FC = () => {
     setPersonalData(prev => ({ ...prev, age: 0, currentSalary: 0, state: '' }));
     setFinancials(prev => ({ ...prev, currentSalary: 0 }));
     setCurrentMode('selection');
-  };
-
-  // State rent data (average monthly rent by state)
-  const stateRentData: { [key: string]: number } = {
-    'Massachusetts': 2837,
-    'New York': 2739,
-    'Hawaii': 2668,
-    'California': 2587,
-    'District of Columbia': 2474,
-    'New Jersey': 2337,
-    'Vermont': 2152,
-    'Rhode Island': 2129,
-    'New Hampshire': 2112,
-    'Connecticut': 2044,
-    'Washington': 2020,
-    'Virginia': 1972,
-    'Maine': 1971,
-    'Florida': 1955,
-    'Illinois': 1944,
-    'Colorado': 1884,
-    'Maryland': 1859,
-    'Oregon': 1757,
-    'Pennsylvania': 1730,
-    'Delaware': 1646,
-    'Georgia': 1608,
-    'Idaho': 1607,
-    'Montana': 1605,
-    'Utah': 1597,
-    'South Carolina': 1594,
-    'Arizona': 1575,
-    'Minnesota': 1558,
-    'Wisconsin': 1548,
-    'Nevada': 1525,
-    'North Carolina': 1524,
-    'Tennessee': 1494,
-    'Alaska': 1482,
-    'Texas': 1449,
-    'New Mexico': 1389,
-    'Michigan': 1346,
-    'Wyoming': 1332,
-    'Mississippi': 1305,
-    'Indiana': 1293,
-    'Alabama': 1288,
-    'Kentucky': 1287,
-    'Nebraska': 1285,
-    'Ohio': 1279,
-    'West Virginia': 1275,
-    'Missouri': 1273,
-    'Kansas': 1243,
-    'Louisiana': 1235,
-    'Iowa': 1220,
-    'South Dakota': 1127,
-    'Arkansas': 1093,
-    'North Dakota': 1077,
-    'Oklahoma': 1035
-  };
-
-  // State grocery data (average weekly grocery costs by state)
-  const stateGroceryData: { [key: string]: number } = {
-    'Hawaii': 333.88,
-    'Alaska': 328.71,
-    'California': 297.72,
-    'Nevada': 294.76,
-    'Mississippi': 290.64,
-    'Washington': 287.67,
-    'Florida': 287.27,
-    'New Mexico': 286.39,
-    'Texas': 286.19,
-    'Louisiana': 282.95,
-    'Colorado': 279.98,
-    'Oklahoma': 279.16,
-    'Utah': 278.41,
-    'Georgia': 278.32,
-    'New Jersey': 274.69,
-    'Massachusetts': 271.98,
-    'Arizona': 271.84,
-    'Alabama': 271.64,
-    'Tennessee': 270.45,
-    'Illinois': 269.47,
-    'New York': 266.40,
-    'North Carolina': 266.23,
-    'Maryland': 266.11,
-    'Connecticut': 265.90,
-    'North Dakota': 265.11,
-    'Arkansas': 260.91,
-    'Virginia': 259.76,
-    'Idaho': 257.54,
-    'South Dakota': 256.48,
-    'Rhode Island': 255.86,
-    'District of Columbia': 254.70,
-    'Kentucky': 254.57,
-    'South Carolina': 254.36,
-    'Wyoming': 254.24,
-    'Ohio': 253.74,
-    'Kansas': 250.88,
-    'Minnesota': 250.56,
-    'Maine': 249.91,
-    'Oregon': 249.38,
-    'Vermont': 249.38,
-    'Pennsylvania': 249.09,
-    'Montana': 246.42,
-    'Delaware': 246.21,
-    'Missouri': 244.43,
-    'New Hampshire': 239.33,
-    'West Virginia': 239.24,
-    'Indiana': 239.11,
-    'Michigan': 236.38,
-    'Nebraska': 235.12,
-    'Iowa': 227.32,
-    'Wisconsin': 221.46
   };
 
   // Rent management functions
