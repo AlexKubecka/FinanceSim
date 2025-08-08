@@ -7,6 +7,7 @@ import {
   HistoricalDataPoint 
 } from '../types/simulation';
 import { SimulationControls } from './SimulationControls';
+import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
 
 // Interactive Net Worth Chart Component
 interface NetWorthChartProps {
@@ -287,6 +288,9 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   onReset,
   onEditProfile
 }) => {
+  // Calculate investment breakdown using centralized utility
+  const investmentBreakdown = calculateInvestmentBreakdown(personalData, financials.investmentAccountValue || 0);
+
   // Calculate net worth components
   const assets = {
     cash: personalData.savings || 0,
@@ -359,7 +363,7 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
               <Wallet className="h-6 w-6 text-green-600 mr-2" />
               <h3 className="text-lg font-semibold text-green-800">Total Assets</h3>
             </div>
-            <p className="text-3xl font-bold text-green-900">${totalAssets.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-green-900">${totalAssets.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
           </div>
           
           <div className="bg-gradient-to-r from-red-50 to-pink-50 p-6 rounded-lg">
@@ -367,7 +371,7 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
               <CreditCard className="h-6 w-6 text-red-600 mr-2" />
               <h3 className="text-lg font-semibold text-red-800">Total Liabilities</h3>
             </div>
-            <p className="text-3xl font-bold text-red-900">${totalLiabilities.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-red-900">${totalLiabilities.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
           </div>
           
           <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-lg">
@@ -375,10 +379,10 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
               <TrendingUp className="h-6 w-6 text-purple-600 mr-2" />
               <h3 className="text-lg font-semibold text-purple-800">Net Worth</h3>
             </div>
-            <p className="text-3xl font-bold text-purple-900">${netWorth.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-purple-900">${netWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             {hasStarted && historicalData.length > 1 && (
               <p className={`text-sm mt-1 ${trend.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {trend.change >= 0 ? '+' : ''}${trend.change.toLocaleString()} ({trend.percentage >= 0 ? '+' : ''}{trend.percentage.toFixed(1)}%) YoY
+                {trend.change >= 0 ? '+' : ''}${trend.change.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({trend.percentage >= 0 ? '+' : ''}{trend.percentage.toFixed(1)}%) YoY
               </p>
             )}
             {hasStarted && historicalData.length <= 1 && (
@@ -395,6 +399,19 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
         </div>
       </div>
 
+      {/* Net Worth History Chart */}
+      {hasStarted && historicalData.length > 1 && (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+            <BarChart3 className="h-6 w-6 text-purple-600 mr-2" />
+            Net Worth History
+          </h2>
+          <NetWorthChart 
+            data={historicalData}
+          />
+        </div>
+      )}
+
       {/* Assets Breakdown */}
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
@@ -404,29 +421,105 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="font-semibold text-blue-800 mb-2">Cash & Savings</h3>
-            <p className="text-2xl font-bold text-blue-900">${assets.cash.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-blue-900">${assets.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             <p className="text-sm text-blue-700">{totalAssets > 0 ? ((assets.cash / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
           </div>
           
           <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-green-800 mb-2">Investments</h3>
-            <p className="text-2xl font-bold text-green-900">${assets.investments.toLocaleString()}</p>
+            <h3 className="font-semibold text-green-800 mb-2">Total Investments</h3>
+            <p className="text-2xl font-bold text-green-900">${assets.investments.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             <p className="text-sm text-green-700">{totalAssets > 0 ? ((assets.investments / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
           </div>
           
           <div className="bg-purple-50 p-4 rounded-lg">
             <h3 className="font-semibold text-purple-800 mb-2">Retirement (401k)</h3>
-            <p className="text-2xl font-bold text-purple-900">${assets.retirement.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-purple-900">${assets.retirement.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             <p className="text-sm text-purple-700">{totalAssets > 0 ? ((assets.retirement / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
           </div>
           
           <div className="bg-gray-50 p-4 rounded-lg">
             <h3 className="font-semibold text-gray-800 mb-2">Other Assets</h3>
-            <p className="text-2xl font-bold text-gray-900">${assets.other.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-gray-900">${assets.other.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             <p className="text-sm text-gray-700">{totalAssets > 0 ? ((assets.other / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
           </div>
         </div>
       </div>
+
+      {/* Investment Account Details */}
+      {assets.investments > 0 && (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+            <BarChart3 className="h-6 w-6 text-purple-600 mr-2" />
+            Investment Account Breakdown
+          </h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-blue-800 mb-2">401(k) Traditional</h3>
+              <p className="text-xl font-bold text-blue-900">${investmentBreakdown.traditional401kBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-blue-700">{assets.investments > 0 ? ((investmentBreakdown.traditional401kBalance / assets.investments) * 100).toFixed(1) : 0}% of investments</p>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-green-800 mb-2">401(k) Roth</h3>
+              <p className="text-xl font-bold text-green-900">${investmentBreakdown.roth401kBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-green-700">{assets.investments > 0 ? ((investmentBreakdown.roth401kBalance / assets.investments) * 100).toFixed(1) : 0}% of investments</p>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-purple-800 mb-2">Traditional IRA</h3>
+              <p className="text-xl font-bold text-purple-900">${investmentBreakdown.traditionalIraBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-purple-700">{assets.investments > 0 ? ((investmentBreakdown.traditionalIraBalance / assets.investments) * 100).toFixed(1) : 0}% of investments</p>
+            </div>
+            
+            <div className="bg-indigo-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-indigo-800 mb-2">Roth IRA</h3>
+              <p className="text-xl font-bold text-indigo-900">${investmentBreakdown.rothIraBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-indigo-700">{assets.investments > 0 ? ((investmentBreakdown.rothIraBalance / assets.investments) * 100).toFixed(1) : 0}% of investments</p>
+            </div>
+            
+            <div className="bg-orange-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-orange-800 mb-2">Taxable Account</h3>
+              <p className="text-xl font-bold text-orange-900">${investmentBreakdown.taxableBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-orange-700">{assets.investments > 0 ? ((investmentBreakdown.taxableBalance / assets.investments) * 100).toFixed(1) : 0}% of investments</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300">
+              <h3 className="font-semibold text-gray-800 mb-2">Total Verification</h3>
+              <p className="text-xl font-bold text-gray-900">${(investmentBreakdown.traditional401kBalance + investmentBreakdown.roth401kBalance + investmentBreakdown.traditionalIraBalance + investmentBreakdown.rothIraBalance + investmentBreakdown.taxableBalance).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-gray-700">Sum of all accounts</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Should match: ${assets.investments.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Investment Allocation Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+              <div className="text-center">
+                <p className="font-medium text-blue-800">Traditional 401(k)</p>
+                <p className="text-blue-600">{assets.investments > 0 ? ((investmentBreakdown.traditional401kBalance / assets.investments) * 100).toFixed(1) : 0}%</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-green-800">Roth 401(k)</p>
+                <p className="text-green-600">{assets.investments > 0 ? ((investmentBreakdown.roth401kBalance / assets.investments) * 100).toFixed(1) : 0}%</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-purple-800">Traditional IRA</p>
+                <p className="text-purple-600">{assets.investments > 0 ? ((investmentBreakdown.traditionalIraBalance / assets.investments) * 100).toFixed(1) : 0}%</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-indigo-800">Roth IRA</p>
+                <p className="text-indigo-600">{assets.investments > 0 ? ((investmentBreakdown.rothIraBalance / assets.investments) * 100).toFixed(1) : 0}%</p>
+              </div>
+              <div className="text-center">
+                <p className="font-medium text-orange-800">Taxable</p>
+                <p className="text-orange-600">{assets.investments > 0 ? ((investmentBreakdown.taxableBalance / assets.investments) * 100).toFixed(1) : 0}%</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Liabilities Breakdown */}
       <div className="bg-white rounded-lg shadow-lg p-6">
@@ -437,7 +530,7 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-red-50 p-4 rounded-lg">
             <h3 className="font-semibold text-red-800 mb-2">General Debt</h3>
-            <p className="text-2xl font-bold text-red-900">${liabilities.debt.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-red-900">${liabilities.debt.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
             <p className="text-sm text-red-700">
               {personalData.debtInterestRate ? `${personalData.debtInterestRate}% interest` : 'No interest rate set'}
             </p>
@@ -462,19 +555,6 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Net Worth History Chart */}
-      {hasStarted && historicalData.length > 1 && (
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
-            <BarChart3 className="h-6 w-6 text-purple-600 mr-2" />
-            Net Worth History
-          </h2>
-          <NetWorthChart 
-            data={historicalData}
-          />
-        </div>
-      )}
 
       {/* Financial Health Indicators */}
       <div className="bg-white rounded-lg shadow-lg p-6">

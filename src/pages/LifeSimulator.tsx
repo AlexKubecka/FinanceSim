@@ -5,7 +5,9 @@ import { Dashboard } from '../components/Dashboard';
 import { SetupWizard } from '../components/SetupWizard';
 import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { NetWorthPage } from '../components/NetWorthPage';
+import InvestmentsPage from '../components/InvestmentsPage';
 import { get401kLimit } from '../utils/financialCalculations';
+import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
 import { 
@@ -27,11 +29,14 @@ export const LifeSimulator: React.FC = () => {
     currentSalary: 0,
     state: '',
     careerField: '',
+    maritalStatus: 'single',
     match401k: 0,
     contributions401k: 0, // DEPRECATED
     contributions401kTraditional: 0,
     contributions401kRoth: 0,
     contribution401kType: 'traditional', // DEPRECATED
+    iraTraditionalContribution: 0,
+    iraRothContribution: 0,
     cashBonus: 0,
     stockBonus: 0,
     savings: 0,
@@ -88,6 +93,9 @@ export const LifeSimulator: React.FC = () => {
 
   // Use ref to persist investment value between simulation steps
   const currentInvestmentValueRef = useRef(0);
+  
+  // Use ref to persist savings value between simulation steps
+  const currentSavingsRef = useRef(0);
 
   // Track if simulation has ever been started
   const [hasStarted, setHasStarted] = useState(false);
@@ -168,6 +176,9 @@ export const LifeSimulator: React.FC = () => {
       };
     });
 
+    // Calculate the current simulation year for debug logging (starts at 1)
+    const debugYear = newAge - personalData.age;
+
     // Update financials with inflation effects
     setPersonalData(prev => {
       let newData = { ...prev };
@@ -213,10 +224,10 @@ export const LifeSimulator: React.FC = () => {
       const newRentData = { ...prev };
       const currentInflationRate = newEconomicState.currentInflationRate;
       
-      // If this is the first simulation step, initialize with current state data
+      // If this is the first simulation step, initialize with current state data and apply first year inflation
       if (Object.keys(prev).length === 0) {
         Object.keys(stateRentData).forEach(state => {
-          newRentData[state] = stateRentData[state];
+          newRentData[state] = stateRentData[state] * (1 + currentInflationRate);
         });
       } else {
         // Apply inflation to all state costs
@@ -232,10 +243,10 @@ export const LifeSimulator: React.FC = () => {
       const newGroceryData = { ...prev };
       const currentInflationRate = newEconomicState.currentInflationRate;
       
-      // If this is the first simulation step, initialize with current state data
+      // If this is the first simulation step, initialize with current state data and apply first year inflation
       if (Object.keys(prev).length === 0) {
         Object.keys(stateGroceryData).forEach(state => {
-          newGroceryData[state] = stateGroceryData[state];
+          newGroceryData[state] = stateGroceryData[state] * (1 + currentInflationRate);
         });
       } else {
         // Apply inflation to all state costs
@@ -252,51 +263,56 @@ export const LifeSimulator: React.FC = () => {
     const updatedAnnualExpenses = financials.annualExpenses * (1 + newEconomicState.currentInflationRate);
     
     // Update personalData savings based on cash flow this year
-    let updatedSavings = personalData.savings;
-    setPersonalData(prev => {
-      const contribution401kTraditional = prev.currentSalary * prev.contributions401kTraditional / 100;
-      const contribution401kRoth = prev.currentSalary * prev.contributions401kRoth / 100;
-      const simulationYear = simulationProgress.currentDate.getFullYear();
-      const taxInfo = calculateTaxes(prev.currentSalary, prev.state, contribution401kTraditional, contribution401kRoth, simulationYear);
-      const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses;
-      
-      updatedSavings = prev.savings + annualCashFlow;
-      return {
-        ...prev,
-        savings: updatedSavings
-      };
-    });
+    const contribution401kTraditional = personalData.currentSalary * personalData.contributions401kTraditional / 100;
+    const contribution401kRoth = personalData.currentSalary * personalData.contributions401kRoth / 100;
+    const simulationYear = simulationProgress.currentDate.getFullYear();
+    const taxInfo = calculateTaxes(personalData.currentSalary, personalData.state, contribution401kTraditional, contribution401kRoth, simulationYear);
+    
+    // Calculate after-tax investment contributions that reduce cash savings
+    const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
+    const annualIraContributions = personalData.iraTraditionalContribution + personalData.iraRothContribution;
+    const afterTaxInvestmentContributions = annualMonthlyInvestments + annualIraContributions;
+    
+    // Annual cash flow = after-tax income - expenses - after-tax investment contributions
+    const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses - afterTaxInvestmentContributions;
+    
+    // Use ref to get current savings value and calculate new savings
+    const currentSavings = currentSavingsRef.current;
+    const updatedSavings = currentSavings + annualCashFlow;
+    
+    // Update the ref with the new savings value for next iteration
+    currentSavingsRef.current = updatedSavings;
+    
+    // Update personalData with the new savings value immediately
+    setPersonalData(prev => ({
+      ...prev,
+      savings: updatedSavings
+    }));
 
     // Calculate investment growth AFTER savings calculation
-    // Calculate 401k contributions
-    const annual401kTraditional = personalData.contributions401kTraditional > 0 ? 
-      (personalData.currentSalary * personalData.contributions401kTraditional / 100) : 0;
-    const annual401kRoth = personalData.contributions401kRoth > 0 ? 
-      (personalData.currentSalary * personalData.contributions401kRoth / 100) : 0;
-    const annual401kContribution = annual401kTraditional + annual401kRoth;
-    const employerMatch = Math.min(
-      annual401kContribution,
-      personalData.currentSalary * personalData.match401k / 100
-    );
-    const total401kContribution = annual401kContribution + employerMatch;
-
-    // Calculate monthly investment contributions (non-401k)
-    const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
+    // Use centralized calculation for consistent contribution amounts
+    const investmentBreakdown = calculateInvestmentBreakdown(personalData, 0); // Pass 0 since we only need contribution amounts, not balances
+    const total401kContribution = investmentBreakdown.annual401kTraditional + investmentBreakdown.annual401kRoth + investmentBreakdown.employerMatch;
 
     // Apply investment growth to existing portfolio
     // Use stock market growth rate from economic simulation
     const investmentGrowthRate = newEconomicState.stockMarketGrowth;
-    const previousInvestmentValue = currentInvestmentValueRef.current; // Use ref instead of state
+    const previousInvestmentValue = currentInvestmentValueRef.current; // Get current value before calculation
     
     // Calculate new investment value: previous value grows + new contributions
     let newInvestmentValue = (previousInvestmentValue * (1 + investmentGrowthRate)) + 
-                        total401kContribution + annualMonthlyInvestments;
+                        total401kContribution + annualMonthlyInvestments + annualIraContributions;
 
-    // Update the ref with the new value
+    // Update the ref with the new value for next iteration
     currentInvestmentValueRef.current = newInvestmentValue;
 
-    // Calculate net worth
-    const calculatedNetWorth = updatedSavings + newInvestmentValue;
+    // Calculate net worth: Total Assets - Total Liabilities (same as NetWorthPage)
+    // Use the values that will be in the final state for consistency with display
+    // Assets = Cash + Investments + Retirement + Other
+    // Liabilities = Debt + Credit Cards + Loans + Other
+    const totalAssets = updatedSavings + newInvestmentValue + 0 + 0; // cash + investments + retirement + other
+    const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other  
+    const calculatedNetWorth = totalAssets - totalLiabilities;
 
     // Single setFinancials call to update both investment value and net worth
     setFinancials(prev => ({
@@ -315,11 +331,71 @@ export const LifeSimulator: React.FC = () => {
         netWorth: calculatedNetWorth,
         salary: personalData.currentSalary,
         investments: newInvestmentValue,
-        debt: 0,
+        debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: newEconomicState.currentInflationRate,
         stockMarketValue: newEconomicState.stockMarketIndex
       };
+      
+      // Debug logging to verify cash flow calculation
+      console.log('Annual Cash Flow Debug:', {
+        year: debugYear,
+        age: newAge,
+        afterTaxIncome: taxInfo.afterTaxIncome,
+        annualExpenses: updatedAnnualExpenses,
+        afterTaxInvestments: afterTaxInvestmentContributions,
+        monthlyInvestments: annualMonthlyInvestments,
+        iraContributions: annualIraContributions,
+        netCashFlow: annualCashFlow,
+        previousSavings: currentSavings,
+        newSavings: updatedSavings,
+        savingsChange: updatedSavings - currentSavings
+      });
+
+      // Debug logging for key financial values
+      console.log('Key Financial Values Debug:', {
+        year: debugYear,
+        age: newAge,
+        updatedSavings: updatedSavings,
+        annualCashFlow: annualCashFlow,
+        newInvestmentValue: newInvestmentValue,
+        totalAssets: totalAssets,
+        totalLiabilities: totalLiabilities,
+        calculatedNetWorth: calculatedNetWorth
+      });
+
+      // Debug logging to verify investment calculation
+      console.log('Investment Growth Debug:', {
+        year: debugYear,
+        age: newAge,
+        previousInvestmentValue: previousInvestmentValue,
+        investmentGrowthRate: investmentGrowthRate,
+        growthAmount: previousInvestmentValue * investmentGrowthRate,
+        breakdown: {
+          annual401kTraditional: investmentBreakdown.annual401kTraditional,
+          annual401kRoth: investmentBreakdown.annual401kRoth,
+          employerMatch: investmentBreakdown.employerMatch,
+          total401k: total401kContribution
+        },
+        monthlyInvestments: annualMonthlyInvestments,
+        iraContributions: annualIraContributions,
+        totalNewContributions: total401kContribution + annualMonthlyInvestments + annualIraContributions,
+        newInvestmentValue: newInvestmentValue,
+        investmentChange: newInvestmentValue - previousInvestmentValue
+      });
+      
+      // Debug logging to verify net worth calculation
+      console.log('Historical Data Point:', {
+        age: newAge,
+        netWorth: calculatedNetWorth,
+        breakdown: {
+          savings: updatedSavings,
+          investments: newInvestmentValue,
+          debt: personalData.debtAmount,
+          calculation: `${updatedSavings} + ${newInvestmentValue} - ${personalData.debtAmount} = ${calculatedNetWorth}`
+        }
+      });
+      
       return [...prev, newPoint];
     });
 
@@ -340,8 +416,11 @@ export const LifeSimulator: React.FC = () => {
       // Store the original salary value before any inflation adjustments
       originalSalaryRef.current = personalData.currentSalary;
       
-      // Initialize investment ref with current investment value
-      currentInvestmentValueRef.current = financials.investmentAccountValue;
+      // Initialize investment ref with current investment value from personalData
+      currentInvestmentValueRef.current = personalData.investments;
+      
+      // Initialize savings ref with current savings value from personalData
+      currentSavingsRef.current = personalData.savings;
       
       setSimulationProgress(prev => ({
         ...prev,
@@ -354,14 +433,17 @@ export const LifeSimulator: React.FC = () => {
       }));
       
       // Initialize historical data with the starting point using proper net worth calculation
-      const initialNetWorth = personalData.savings + financials.investmentAccountValue;
+      // Same calculation as NetWorthPage: Total Assets - Total Liabilities
+      const totalAssets = personalData.savings + financials.investmentAccountValue + 0 + 0; // cash + investments + retirement + other
+      const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
+      const initialNetWorth = totalAssets - totalLiabilities;
       
       setHistoricalData([{
         age: personalData.age,
         netWorth: initialNetWorth,
         salary: personalData.currentSalary,
         investments: financials.investmentAccountValue,
-        debt: 0,
+        debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
         stockMarketValue: economicState.stockMarketIndex
@@ -507,7 +589,7 @@ export const LifeSimulator: React.FC = () => {
       setRecentEvents(prev => {
         const newEvent = {
           type: 'bonus',
-          description: `You got a new job with salary $${salary.toLocaleString()}!`,
+          description: `You got a new job with salary $${salary.toLocaleString('en-US', { maximumFractionDigits: 0 })}!`,
           timestamp: new Date(),
           id: Math.random().toString(36).substr(2, 9)
         };
@@ -559,6 +641,7 @@ export const LifeSimulator: React.FC = () => {
       setPersonalData(prev => ({
         ...prev,
         savings: 0,
+        investments: 0, // Reset investments to 0
         currentSalary: originalSalaryRef.current
       }));
       
@@ -574,10 +657,11 @@ export const LifeSimulator: React.FC = () => {
         investmentAccountValue: 0
       }));
     } else {
-      // Reset savings to 0
+      // Reset savings and investments to 0
       setPersonalData(prev => ({
         ...prev,
-        savings: 0
+        savings: 0,
+        investments: 0 // Reset investments to 0
       }));
       
       setFinancials(prev => ({
@@ -615,9 +699,12 @@ export const LifeSimulator: React.FC = () => {
         currentSalary: 65000,
         state: 'California',
         careerField: 'Tech' as const,
+        maritalStatus: 'single' as const,
         match401k: 4,
         contributions401kTraditional: 10,
         contributions401kRoth: 5,
+        iraTraditionalContribution: 0,
+        iraRothContribution: 3000,
         savings: 15000,
         investments: 5000,
         debtAmount: 25000,
@@ -631,9 +718,12 @@ export const LifeSimulator: React.FC = () => {
         currentSalary: 85000,
         state: 'Texas',
         careerField: 'Government' as const,
+        maritalStatus: 'married-jointly' as const,
         match401k: 5,
         contributions401kTraditional: 15,
         contributions401kRoth: 0,
+        iraTraditionalContribution: 7000,
+        iraRothContribution: 0,
         savings: 45000,
         investments: 35000,
         debtAmount: 15000,
@@ -647,9 +737,12 @@ export const LifeSimulator: React.FC = () => {
         currentSalary: 45000,
         state: 'Florida',
         careerField: 'Service' as const,
+        maritalStatus: 'single' as const,
         match401k: 3,
         contributions401kTraditional: 8,
         contributions401kRoth: 2,
+        iraTraditionalContribution: 0,
+        iraRothContribution: 2000,
         savings: 8000,
         investments: 2000,
         debtAmount: 35000,
@@ -926,17 +1019,26 @@ export const LifeSimulator: React.FC = () => {
 
     const annualExpenses = calculateAnnualExpenses();
     
-    // Calculate proper net worth: Assets - Liabilities
+    // Calculate proper net worth: Assets - Liabilities (same as NetWorthPage)
     // Net worth = Cash savings + Investment accounts + 401k balance - Debt
-    const netWorth = personalData.savings + financials.investmentAccountValue; // No debt currently tracked
+    const totalAssets = personalData.savings + personalData.investments + 0 + 0; // cash + investments + retirement + other
+    const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
+    const netWorth = totalAssets - totalLiabilities; // Use personalData.investments for initial setup
+    
+    // Initialize the investment ref with the current investment value if not started
+    currentInvestmentValueRef.current = personalData.investments;
+    
+    // Initialize the savings ref with the current savings value if not started
+    currentSavingsRef.current = personalData.savings;
     
     setFinancials(prev => ({
       ...prev,
       currentSalary: personalData.currentSalary,
       annualExpenses: annualExpenses,
-      netWorth: netWorth
+      netWorth: netWorth,
+      investmentAccountValue: personalData.investments // Sync the financials with personalData
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, financials.investmentAccountValue]);
+  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -1055,19 +1157,19 @@ export const LifeSimulator: React.FC = () => {
             <div className="grid md:grid-cols-3 gap-6">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-blue-800 mb-2">Monthly Rent</h3>
-                <p className="text-2xl font-bold text-blue-900">${currentStateRent.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-blue-900">${currentStateRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
                 <p className="text-sm text-blue-700">
                   {isUsingCustomRent ? 'Your custom amount' : 'State average'}
                 </p>
                 {isUsingCustomRent && defaultStateRent > 0 && (
                   <p className="text-xs text-gray-600 mt-1">
-                    State avg: ${defaultStateRent.toLocaleString()}
+                    State avg: ${defaultStateRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </p>
                 )}
               </div>
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-green-800 mb-2">Annual Housing Cost</h3>
-                <p className="text-2xl font-bold text-green-900">${annualRent.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-green-900">${annualRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
                 <p className="text-sm text-green-700">Per year</p>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
@@ -1155,7 +1257,7 @@ export const LifeSimulator: React.FC = () => {
               </div>
               <div className="bg-yellow-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-yellow-800 mb-2">Annual Food Cost</h3>
-                <p className="text-2xl font-bold text-yellow-900">${annualGrocery.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-yellow-900">${annualGrocery.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
                 <p className="text-sm text-yellow-700">Per year</p>
               </div>
               <div className="bg-red-50 p-4 rounded-lg">
@@ -1178,7 +1280,7 @@ export const LifeSimulator: React.FC = () => {
             <div className="grid md:grid-cols-2 gap-6">
               <div className="bg-orange-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-orange-800 mb-2">Total Annual Expenses</h3>
-                <p className="text-3xl font-bold text-orange-900">${totalAnnualExpenses.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-orange-900">${totalAnnualExpenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
                 <p className="text-sm text-orange-700">Housing + Food costs</p>
               </div>
               <div className="bg-indigo-50 p-4 rounded-lg">
@@ -1252,566 +1354,22 @@ export const LifeSimulator: React.FC = () => {
 
   const renderInvestmentsPage = () => {
     return (
-      <div className="space-y-8">
-        {/* Persistent Simulation Controls */}
-        <SimulationControls
-          hasStarted={hasStarted}
-          simulationState={simulationState}
-          simulationProgress={simulationProgress}
-          personalData={personalData}
-          onStart={startSimulation}
-          onPause={pauseSimulation}
-          onReset={resetSimulation}
-          onEditProfile={handleEditProfile}
-        />
-        
-        {/* Header */}
-        <div className="flex items-center mb-6">
-          <button
-            onClick={() => setCurrentMode('personal')}
-            className="flex items-center text-purple-600 hover:text-purple-800 mr-4"
-          >
-            ← Back to Dashboard
-          </button>
-          <TrendingUp className="h-8 w-8 text-purple-600 mr-3" />
-          <h1 className="text-3xl font-bold text-gray-800">Investment Planning</h1>
-        </div>
-
-        {/* 401(k) Planning */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">401(k) Retirement Planning</h2>
-          
-          {/* Retirement Charts */}
-          {personalData.currentSalary > 0 ? (
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Retirement Contributions Breakdown Chart */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Annual Retirement Contributions</h3>
-                <div className="space-y-4">
-                  {(() => {
-                    const yourTraditionalContribution = personalData.currentSalary * personalData.contributions401kTraditional / 100;
-                    const yourRothContribution = personalData.currentSalary * personalData.contributions401kRoth / 100;
-                    const yourTotalContribution = yourTraditionalContribution + yourRothContribution;
-                    const employerMatch = Math.min(
-                      yourTotalContribution,
-                      personalData.currentSalary * personalData.match401k / 100
-                    );
-                    const maxPossibleMatch = personalData.currentSalary * personalData.match401k / 100;
-                    const missedMatch = maxPossibleMatch - employerMatch;
-                    const totalContribution = yourTotalContribution + employerMatch;
-                    const maxTotal = yourTotalContribution + maxPossibleMatch;
-
-                    if (totalContribution === 0) {
-                      return (
-                        <div className="text-center py-8 text-gray-500">
-                          <p>No contributions yet</p>
-                          <p className="text-sm mt-2">Start contributing to see breakdown</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-6">
-                        {/* Donut Chart Representation */}
-                        <div className="flex items-center justify-center">
-                          <div className="relative w-48 h-48">
-                            <svg width="192" height="192" className="transform -rotate-90">
-                              {/* Background circle */}
-                              <circle
-                                cx="96"
-                                cy="96"
-                                r="80"
-                                stroke="#e5e7eb"
-                                strokeWidth="16"
-                                fill="transparent"
-                              />
-                              
-                              {/* Your contribution arc */}
-                              <circle
-                                cx="96"
-                                cy="96"
-                                r="80"
-                                stroke="#3b82f6"
-                                strokeWidth="16"
-                                fill="transparent"
-                                strokeDasharray={`${(yourTotalContribution / totalContribution) * 502.65} 502.65`}
-                                strokeDashoffset="0"
-                              />
-                              
-                              {/* Employer match arc */}
-                              <circle
-                                cx="96"
-                                cy="96"
-                                r="80"
-                                stroke="#10b981"
-                                strokeWidth="16"
-                                fill="transparent"
-                                strokeDasharray={`${(employerMatch / totalContribution) * 502.65} 502.65`}
-                                strokeDashoffset={`-${(yourTotalContribution / totalContribution) * 502.65}`}
-                              />
-                            </svg>
-                            
-                            {/* Center text */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="text-center">
-                                <div className="text-lg font-bold text-gray-800">
-                                  ${totalContribution.toLocaleString()}
-                                </div>
-                                <div className="text-sm text-gray-600">Total Annual</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Legend and Details */}
-                        <div className="space-y-3">
-                          {yourTraditionalContribution > 0 && (
-                            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-4 h-4 bg-blue-500 rounded mr-3"></div>
-                                <span className="text-sm font-medium text-gray-700">Traditional 401(k)</span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-gray-900">
-                                  ${yourTraditionalContribution.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {personalData.contributions401kTraditional.toFixed(2)}% of salary
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {yourRothContribution > 0 && (
-                            <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-4 h-4 bg-purple-500 rounded mr-3"></div>
-                                <span className="text-sm font-medium text-gray-700">Roth 401(k)</span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-gray-900">
-                                  ${yourRothContribution.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {personalData.contributions401kRoth.toFixed(2)}% of salary
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                            <div className="flex items-center">
-                              <div className="w-4 h-4 bg-green-500 rounded mr-3"></div>
-                              <span className="text-sm font-medium text-gray-700">Employer Match</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-gray-900">
-                                ${employerMatch.toLocaleString()}
-                              </div>
-                              <div className="text-xs text-gray-600">
-                                {((employerMatch / personalData.currentSalary) * 100).toFixed(1)}% of salary
-                              </div>
-                            </div>
-                          </div>
-
-                          {missedMatch > 0 && (
-                            <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                              <div className="flex items-center">
-                                <div className="w-4 h-4 bg-red-500 rounded mr-3"></div>
-                                <span className="text-sm font-medium text-red-700">Missed Match</span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-red-900">
-                                  -${missedMatch.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-red-600">
-                                  Free money left behind
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="pt-3 border-t border-gray-200">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700">Potential Maximum</span>
-                              <span className="text-sm font-bold text-gray-900">
-                                ${maxTotal.toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-600 mt-1">
-                              With full employer match at {personalData.match401k}%
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Future Retirement Projections Line Chart */}
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Future Retirement Projections</h3>
-                <div className="space-y-4">
-                  {(() => {
-                    const projectionData: { age: number; value: number; years: number }[] = [];
-                    const currentAge = personalData.age || 25;
-                    const retirementAge = personalData.retirementAge || 65;
-                    const annualYourContribution = 
-                      (personalData.currentSalary * personalData.contributions401kTraditional / 100) + 
-                      (personalData.currentSalary * personalData.contributions401kRoth / 100);
-                    const annualContribution = annualYourContribution > 0 ? 
-                      annualYourContribution + Math.min(
-                        annualYourContribution,
-                        personalData.currentSalary * personalData.match401k / 100
-                      ) : 0;
-
-                    // Generate data for every year from current age to retirement age
-                    for (let age = currentAge; age <= retirementAge; age++) {
-                      const yearsToRetire = age - currentAge;
-                      const futureValue = yearsToRetire > 0 && annualContribution > 0 ? 
-                        annualContribution * (((1 + 0.07) ** yearsToRetire - 1) / 0.07) : 
-                        (age === currentAge ? personalData.savings || 0 : 0);
-                      projectionData.push({ age, value: futureValue, years: yearsToRetire });
-                    }
-
-                    const maxValue = Math.max(...projectionData.map(d => d.value), 100000);
-                    const chartHeight = 300;
-                    const chartWidth = 500;
-                    const padding = 50;
-
-                    return (
-                      <div className="space-y-4">
-                        <div className="text-sm text-gray-600 mb-4">
-                          Based on current contribution rate of {(personalData.contributions401kTraditional + personalData.contributions401kRoth).toFixed(2)}% with 7% annual return
-                        </div>
-                        
-                        {/* SVG Line Chart */}
-                        <div className="flex justify-center">
-                          <svg width={chartWidth} height={chartHeight + padding * 2} className="border border-gray-200 rounded">
-                            {/* Grid lines */}
-                            {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
-                              <g key={ratio}>
-                                <line
-                                  x1={padding}
-                                  y1={padding + chartHeight * ratio}
-                                  x2={chartWidth - padding}
-                                  y2={padding + chartHeight * ratio}
-                                  stroke="#e5e7eb"
-                                  strokeWidth="1"
-                                />
-                                <text
-                                  x={padding - 10}
-                                  y={padding + chartHeight * ratio + 4}
-                                  fontSize="10"
-                                  textAnchor="end"
-                                  fill="#6b7280"
-                                >
-                                  ${(maxValue * (1 - ratio) / 1000000).toFixed(1)}M
-                                </text>
-                              </g>
-                            ))}
-                            
-                            {/* X-axis labels - show every 5 years for readability */}
-                            {projectionData.filter((_, index) => index % 5 === 0 || index === projectionData.length - 1).map((point) => {
-                              const originalIndex = projectionData.findIndex(p => p.age === point.age);
-                              return (
-                                <text
-                                  key={point.age}
-                                  x={padding + (originalIndex * (chartWidth - 2 * padding)) / (projectionData.length - 1)}
-                                  y={chartHeight + padding + 20}
-                                  fontSize="10"
-                                  textAnchor="middle"
-                                  fill="#6b7280"
-                                >
-                                  {point.age}
-                                </text>
-                              );
-                            })}
-                            
-                            {/* Line path */}
-                            <path
-                              d={projectionData.map((point, index) => {
-                                const x = padding + (index * (chartWidth - 2 * padding)) / (projectionData.length - 1);
-                                const y = padding + chartHeight - (point.value / maxValue) * chartHeight;
-                                return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
-                              }).join(' ')}
-                              stroke="#3b82f6"
-                              strokeWidth="3"
-                              fill="none"
-                            />
-                            
-                            {/* Data points - show fewer points for readability */}
-                            {projectionData.filter((_, index) => index % 5 === 0 || index === projectionData.length - 1).map((point) => {
-                              const originalIndex = projectionData.findIndex(p => p.age === point.age);
-                              const x = padding + (originalIndex * (chartWidth - 2 * padding)) / (projectionData.length - 1);
-                              const y = padding + chartHeight - (point.value / maxValue) * chartHeight;
-                              return (
-                                <g key={point.age}>
-                                  <circle
-                                    cx={x}
-                                    cy={y}
-                                    r="4"
-                                    fill="#3b82f6"
-                                    stroke="white"
-                                    strokeWidth="2"
-                                  />
-                                  {/* Tooltip on hover */}
-                                  <title>
-                                    Age {point.age}: ${point.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                                  </title>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                        </div>
-                        
-                        {annualContribution === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <p>Start contributing to see projections</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <p>Enter your salary information to see retirement planning charts</p>
-            </div>
-          )}
-        </div>
-
-        {/* Current Investment Portfolio */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Current Investment Portfolio</h2>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-green-800 mb-2">Total Portfolio Value</h3>
-              <div className="text-3xl font-bold text-green-900 mb-1">
-                ${financials.investmentAccountValue.toLocaleString()}
-              </div>
-              <p className="text-sm text-green-700">401(k) + Investment Accounts</p>
-            </div>
-
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-blue-800 mb-2">401(k) Contributions</h3>
-              <div className="text-2xl font-bold text-blue-900 mb-1">
-                {(personalData.contributions401kTraditional + personalData.contributions401kRoth).toFixed(2)}%
-              </div>
-              <p className="text-sm text-blue-700">
-                ${personalData.currentSalary > 0 ? 
-                  Math.min(
-                    personalData.currentSalary * (personalData.contributions401kTraditional + personalData.contributions401kRoth) / 100,
-                    get401kLimit(hasStarted ? simulationProgress.currentDate.getFullYear() : undefined)
-                  ).toLocaleString() : '0'} annually
-                {personalData.contributions401kTraditional > 0 && personalData.contributions401kRoth > 0 && (
-                  <span className="block text-xs">
-                    {personalData.contributions401kTraditional.toFixed(1)}% Traditional, {personalData.contributions401kRoth.toFixed(1)}% Roth
-                  </span>
-                )}
-                {personalData.contributions401kTraditional > 0 && personalData.contributions401kRoth === 0 && (
-                  <span className="block text-xs">Traditional</span>
-                )}
-                {personalData.contributions401kRoth > 0 && personalData.contributions401kTraditional === 0 && (
-                  <span className="block text-xs">Roth</span>
-                )}
-              </p>
-              {personalData.currentSalary > 0 && (
-                <p className="text-xs text-blue-600 mt-1">
-                  IRS limit: ${get401kLimit(hasStarted ? simulationProgress.currentDate.getFullYear() : undefined).toLocaleString()} 
-                  ({hasStarted ? simulationProgress.currentDate.getFullYear() : new Date().getFullYear()})
-                </p>
-              )}
-            </div>
-
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-purple-800 mb-2">Monthly Investments</h3>
-              <div className="text-2xl font-bold text-purple-900 mb-1">
-                ${personalData.monthlyInvestment.toLocaleString()}
-              </div>
-              <p className="text-sm text-purple-700">
-                ${(personalData.monthlyInvestment * 12).toLocaleString()} annually
-              </p>
-            </div>
-          </div>
-
-          {/* Portfolio Performance (if simulation has started) */}
-          {hasStarted && historicalData.length > 1 && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Portfolio Performance</h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="text-md font-semibold text-gray-700 mb-2">Investment Growth</h4>
-                  {(() => {
-                    const firstDataPoint = historicalData[0];
-                    const lastDataPoint = historicalData[historicalData.length - 1];
-                    const initialValue = firstDataPoint.investments;
-                    const currentValue = lastDataPoint.investments;
-                    const totalGrowth = currentValue - initialValue;
-                    const growthPercentage = initialValue > 0 ? ((currentValue - initialValue) / initialValue) * 100 : 0;
-                    
-                    return (
-                      <div>
-                        <div className="text-lg font-bold text-gray-900">
-                          ${totalGrowth.toLocaleString()} 
-                          <span className={`text-sm ml-2 ${growthPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            ({growthPercentage >= 0 ? '+' : ''}{growthPercentage.toFixed(1)}%)
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          Since age {firstDataPoint.age} ({historicalData.length} years)
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </div>
-                
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="text-md font-semibold text-gray-700 mb-2">Stock Market Impact</h4>
-                  <div className="text-lg font-bold text-gray-900">
-                    Market: {economicState.stockMarketIndex.toLocaleString()}
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Current market cycle: {economicState.economicCycle}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!hasStarted && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="text-center py-4 text-gray-500">
-                <p>Start the simulation to see your portfolio grow over time!</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Investment Strategy */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Investment Strategy</h2>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Current Risk Tolerance</h3>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl font-bold text-blue-600 capitalize">{personalData.riskTolerance}</span>
-                <div className={`w-4 h-4 rounded-full ${
-                  personalData.riskTolerance === 'conservative' ? 'bg-yellow-500' :
-                  personalData.riskTolerance === 'moderate' ? 'bg-blue-500' : 'bg-red-500'
-                }`}></div>
-              </div>
-              <p className="text-sm text-gray-600">
-                {personalData.riskTolerance === 'conservative' && 'Lower risk, steady returns'}
-                {personalData.riskTolerance === 'moderate' && 'Balanced risk and growth'}
-                {personalData.riskTolerance === 'aggressive' && 'Higher risk, higher potential returns'}
-              </p>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Monthly Investment</h3>
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                ${personalData.monthlyInvestment.toLocaleString()}
-              </div>
-              <p className="text-sm text-gray-600">Additional investing beyond 401(k)</p>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Retirement Goal</h3>
-              <div className="text-2xl font-bold text-purple-600 mb-1">
-                ${personalData.retirementGoal.toLocaleString()}
-              </div>
-              <p className="text-sm text-gray-600">Target retirement savings at age {personalData.retirementAge}</p>
-            </div>
-          </div>
-
-          {/* Investment Recommendations */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="text-lg font-semibold text-blue-800 mb-3">Recommendations</h3>
-            <div className="space-y-2">
-              {(personalData.contributions401kTraditional + personalData.contributions401kRoth) < personalData.match401k && (
-                <div className="flex items-start">
-                  <div className="w-2 h-2 bg-red-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                  <p className="text-sm text-blue-700">
-                    <strong>Increase 401(k) contribution to {personalData.match401k}%</strong> to get full employer match. 
-                    You're leaving ${((personalData.currentSalary * personalData.match401k / 100) - Math.min(
-                      personalData.currentSalary * (personalData.contributions401kTraditional + personalData.contributions401kRoth) / 100,
-                      personalData.currentSalary * personalData.match401k / 100
-                    )).toLocaleString()} on the table!
-                  </p>
-                </div>
-              )}
-              
-              {(personalData.contributions401kTraditional + personalData.contributions401kRoth) >= personalData.match401k && (personalData.contributions401kTraditional + personalData.contributions401kRoth) < 15 && (() => {
-                const current401kLimit = get401kLimit(hasStarted ? simulationProgress.currentDate.getFullYear() : undefined);
-                const maxPercentage = personalData.currentSalary > 0 ? (current401kLimit / personalData.currentSalary) * 100 : 0;
-                
-                if (maxPercentage > 15) {
-                  return (
-                    <div className="flex items-start">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                      <p className="text-sm text-blue-700">
-                        Consider increasing 401(k) to 15% for better retirement security.
-                      </p>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="flex items-start">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                      <p className="text-sm text-blue-700">
-                        Consider maximizing 401(k) contribution to IRS limit of ${current401kLimit.toLocaleString()} ({maxPercentage.toFixed(2)}% of salary).
-                      </p>
-                    </div>
-                  );
-                }
-              })()}
-
-              {(personalData.contributions401kTraditional + personalData.contributions401kRoth) >= 15 && (() => {
-                const currentContribution = personalData.currentSalary * (personalData.contributions401kTraditional + personalData.contributions401kRoth) / 100;
-                const current401kLimit = get401kLimit(hasStarted ? simulationProgress.currentDate.getFullYear() : undefined);
-                const isMaxedOut = currentContribution >= current401kLimit;
-                
-                if (!isMaxedOut) {
-                  const remainingRoom = current401kLimit - currentContribution;
-                  return (
-                    <div className="flex items-start">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                      <p className="text-sm text-blue-700">
-                        You can contribute ${remainingRoom.toLocaleString()} more to reach the IRS 401(k) limit of ${current401kLimit.toLocaleString()}.
-                      </p>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              <div className="flex items-start">
-                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                <p className="text-sm text-blue-700">
-                  Build an emergency fund of ${((personalData.currentSalary / 12) * personalData.emergencyFundMonths).toLocaleString()} 
-                  ({personalData.emergencyFundMonths} months expenses) before increasing investments.
-                </p>
-              </div>
-
-              <div className="flex items-start">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
-                <p className="text-sm text-blue-700">
-                  Consider diversified index funds for your {personalData.riskTolerance} risk profile.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <InvestmentsPage
+        data={personalData}
+        setData={setPersonalData}
+        navigate={(page: string) => setCurrentMode(page as SimulationMode)}
+        formatCurrency={(amount: number) => amount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        hasStarted={hasStarted}
+        simulationState={simulationState}
+        simulationProgress={simulationProgress}
+        onStart={startSimulation}
+        onPause={pauseSimulation}
+        onReset={resetSimulation}
+        onEditProfile={handleEditProfile}
+        financials={financials}
+      />
     );
   };
-
   const renderSelectionPage = () => (
     <ModeSelectionPage 
       setCurrentMode={setCurrentMode} 
@@ -2831,6 +2389,7 @@ export const LifeSimulator: React.FC = () => {
           <Dashboard
             personalData={personalData}
             financials={financials}
+            currentAnnualExpenses={calculateAnnualExpenses()}
             hasStarted={hasStarted}
             simulationState={simulationState}
             simulationProgress={simulationProgress}

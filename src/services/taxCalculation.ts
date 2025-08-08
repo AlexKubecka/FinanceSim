@@ -56,6 +56,8 @@ export const calculateTaxes = (
   state: string = '', 
   contribution401kTraditional: number = 0, 
   contribution401kRoth: number = 0, 
+  iraTraditionalContribution: number = 0,
+  iraRothContribution: number = 0,
   year?: number
 ): TaxCalculationResult => {
   if (annualSalary <= 0) {
@@ -71,6 +73,9 @@ export const calculateTaxes = (
       contribution401kTraditional: 0,
       contribution401kRoth: 0,
       totalContribution401k: 0,
+      iraTraditionalContribution: 0,
+      iraRothContribution: 0,
+      totalIraContribution: 0,
       taxableIncome: 0
     };
   }
@@ -85,8 +90,8 @@ export const calculateTaxes = (
   const cappedTraditional = contribution401kTraditional * reductionFactor;
   const cappedRoth = contribution401kRoth * reductionFactor;
 
-  // Calculate taxable income - Traditional 401k reduces taxable income, Roth does not
-  const taxableIncome = annualSalary - cappedTraditional;
+  // Calculate taxable income - Traditional 401k and Traditional IRA reduce taxable income, Roth does not
+  const taxableIncome = annualSalary - cappedTraditional - iraTraditionalContribution;
 
   // Calculate federal tax using progressive brackets
   let federalTax = 0;
@@ -128,6 +133,9 @@ export const calculateTaxes = (
     contribution401kTraditional: cappedTraditional,
     contribution401kRoth: cappedRoth,
     totalContribution401k: cappedTotalContribution,
+    iraTraditionalContribution,
+    iraRothContribution,
+    totalIraContribution: iraTraditionalContribution + iraRothContribution,
     taxableIncome
   };
 };

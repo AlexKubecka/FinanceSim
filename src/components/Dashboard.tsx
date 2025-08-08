@@ -9,6 +9,8 @@ import {
   EventNotification 
 } from '../types/simulation';
 import { SimulationControls } from './SimulationControls';
+import { ProgressTimeline } from './ProgressTimeline';
+import { LifeProgressBar } from './LifeProgressBar';
 
 type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
 
@@ -31,6 +33,9 @@ interface DashboardProps {
   // Core data
   personalData: PersonalFinancialData;
   financials: FinancialState;
+  
+  // Current calculated values (for accurate display)
+  currentAnnualExpenses: number;
   
   // Simulation state
   hasStarted: boolean;
@@ -60,6 +65,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({
   personalData,
   financials,
+  currentAnnualExpenses,
   hasStarted,
   simulationState,
   simulationProgress,
@@ -88,6 +94,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onReset={resetSimulation}
         onEditProfile={handleEditProfile}
       />
+
+      {/* Life Progress Bar */}
+      {hasStarted && (
+        <LifeProgressBar
+          personalData={personalData}
+          currentAge={simulationProgress.currentDate.getFullYear() - (new Date().getFullYear() - personalData.age)}
+          netWorth={financials.netWorth}
+        />
+      )}
       
       {/* Header */}
       <div className="flex items-center mb-6">
@@ -184,8 +199,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div className="text-3xl font-bold text-purple-600 mb-2">
-            ${financials.netWorth.toLocaleString()}
+            ${financials.netWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
+          
+          {/* YoY Growth Indicator */}
+          {historicalData.length >= 2 && (
+            <div className="flex items-center mb-2">
+              {(() => {
+                const currentValue = historicalData[historicalData.length - 1]?.netWorth || 0;
+                const previousValue = historicalData[historicalData.length - 2]?.netWorth || 0;
+                const growth = previousValue !== 0 ? ((currentValue - previousValue) / previousValue) * 100 : 0;
+                const isPositive = growth >= 0;
+                
+                return (
+                  <>
+                    <span className={`text-sm font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                      {isPositive ? '+' : ''}{growth.toFixed(1)}% YoY
+                    </span>
+                    <span className="text-xs text-gray-500 ml-2">
+                      ({isPositive ? '+' : ''}${(currentValue - previousValue).toLocaleString('en-US', { maximumFractionDigits: 0 })})
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+          
           <p className="text-sm text-gray-500">Cash + Investments (Click to view breakdown)</p>
           
           {/* Mini Line Chart */}
@@ -267,7 +306,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div className="text-3xl font-bold text-green-600 mb-2">
-            ${financials.currentSalary.toLocaleString()}
+            ${financials.currentSalary.toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
           <p className="text-sm text-gray-500">Click for tax breakdown</p>
           
@@ -291,7 +330,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div className="text-3xl font-bold text-orange-600 mb-2">
-            ${financials.annualExpenses.toLocaleString()}
+            ${currentAnnualExpenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
           <p className="text-sm text-gray-500">Click to manage expenses</p>
           
@@ -419,7 +458,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <p className="text-sm text-gray-600">Total Invested</p>
               <p className="text-lg font-bold text-purple-600">
-                ${(financials.investmentAccountValue || personalData.investments || 0).toLocaleString()}
+                ${(financials.investmentAccountValue || personalData.investments || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
               </p>
             </div>
             <div>
@@ -447,18 +486,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
+      {/* Progress Timeline */}
+      {hasStarted && historicalData.length > 0 && (
+        <ProgressTimeline
+          historicalData={historicalData}
+          personalData={personalData}
+          currentAge={simulationProgress.currentDate.getFullYear() - (new Date().getFullYear() - personalData.age)}
+        />
+      )}
+
       {/* Quick Financial Summary */}
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Financial Summary</h2>
         <div className="grid md:grid-cols-4 gap-6">
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Take-Home Pay</p>
-            <p className="text-2xl font-bold text-blue-600">${taxInfo.afterTaxIncome.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-blue-600">${taxInfo.afterTaxIncome.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Monthly Surplus</p>
-            <p className={`text-2xl font-bold ${((taxInfo.afterTaxIncome - financials.annualExpenses) / 12) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-              ${(((taxInfo.afterTaxIncome - financials.annualExpenses) / 12)).toLocaleString()}
+            <p className={`text-2xl font-bold ${((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+              ${(((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
           </div>
           <div className="text-center">

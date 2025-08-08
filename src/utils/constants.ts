@@ -10,11 +10,13 @@ export const INITIAL_ECONOMIC_STATE = {
   yearsInCurrentCycle: 0
 };
 
-// 401k limits and configuration
+// 401k and IRA limits and configuration
 export const RETIREMENT_CONFIG = {
   BASE_YEAR: 2025,
   BASE_401K_LIMIT: 23500,
   ANNUAL_INCREASE: 500,
+  IRA_LIMIT_UNDER_50: 7000,
+  IRA_LIMIT_50_PLUS: 8000,
   SOCIAL_SECURITY_WAGE_BASE: 160200,
   MEDICARE_ADDITIONAL_THRESHOLD: 200000
 };
@@ -32,6 +34,74 @@ export const get401kLimit = (year?: number): number => {
   }
   
   return baseLimit + (annualIncrease * (currentYear - baseYear));
+};
+
+// IRA contribution limits
+export const getIraLimit = (age: number): number => {
+  return age >= 50 ? RETIREMENT_CONFIG.IRA_LIMIT_50_PLUS : RETIREMENT_CONFIG.IRA_LIMIT_UNDER_50;
+};
+
+// Roth IRA income limits and phase-out ranges (2025 tax year)
+export const ROTH_IRA_INCOME_LIMITS = {
+  single: [
+    { min: 0, max: 150000, maxContribution: 7000, maxContribution50Plus: 8000 },
+    { min: 150000, max: 151500, maxContribution: 6300, maxContribution50Plus: 7200 },
+    { min: 151500, max: 153000, maxContribution: 5600, maxContribution50Plus: 6400 },
+    { min: 153000, max: 154500, maxContribution: 4900, maxContribution50Plus: 5600 },
+    { min: 154500, max: 156000, maxContribution: 4200, maxContribution50Plus: 4800 },
+    { min: 156000, max: 157500, maxContribution: 3500, maxContribution50Plus: 4000 },
+    { min: 157500, max: 159000, maxContribution: 2800, maxContribution50Plus: 3200 },
+    { min: 159000, max: 160500, maxContribution: 2100, maxContribution50Plus: 2400 },
+    { min: 160500, max: 162000, maxContribution: 1400, maxContribution50Plus: 1600 },
+    { min: 162000, max: 163500, maxContribution: 700, maxContribution50Plus: 800 },
+    { min: 163500, max: Infinity, maxContribution: 0, maxContribution50Plus: 0 }
+  ],
+  marriedJointly: [
+    { min: 0, max: 236000, maxContribution: 7000, maxContribution50Plus: 8000 },
+    { min: 236000, max: 237000, maxContribution: 6300, maxContribution50Plus: 7200 },
+    { min: 237000, max: 238000, maxContribution: 5600, maxContribution50Plus: 6400 },
+    { min: 238000, max: 239000, maxContribution: 4900, maxContribution50Plus: 5600 },
+    { min: 239000, max: 240000, maxContribution: 4200, maxContribution50Plus: 4800 },
+    { min: 240000, max: 241000, maxContribution: 3500, maxContribution50Plus: 4000 },
+    { min: 241000, max: 242000, maxContribution: 2800, maxContribution50Plus: 3200 },
+    { min: 242000, max: 243000, maxContribution: 2100, maxContribution50Plus: 2400 },
+    { min: 243000, max: 244000, maxContribution: 1400, maxContribution50Plus: 1600 },
+    { min: 244000, max: 245000, maxContribution: 700, maxContribution50Plus: 800 },
+    { min: 245000, max: Infinity, maxContribution: 0, maxContribution50Plus: 0 }
+  ],
+  marriedSeparately: [
+    { min: 0, max: 0, maxContribution: 7000, maxContribution50Plus: 8000 },
+    { min: 0, max: 1000, maxContribution: 6300, maxContribution50Plus: 7200 },
+    { min: 1000, max: 2000, maxContribution: 5600, maxContribution50Plus: 6400 },
+    { min: 2000, max: 3000, maxContribution: 4900, maxContribution50Plus: 5600 },
+    { min: 3000, max: 4000, maxContribution: 4200, maxContribution50Plus: 4800 },
+    { min: 4000, max: 5000, maxContribution: 3500, maxContribution50Plus: 4000 },
+    { min: 5000, max: 6000, maxContribution: 2800, maxContribution50Plus: 3200 },
+    { min: 6000, max: 7000, maxContribution: 2100, maxContribution50Plus: 2400 },
+    { min: 7000, max: 8000, maxContribution: 1400, maxContribution50Plus: 1600 },
+    { min: 8000, max: 9000, maxContribution: 700, maxContribution50Plus: 800 },
+    { min: 9000, max: Infinity, maxContribution: 0, maxContribution50Plus: 0 }
+  ]
+};
+
+// Calculate maximum Roth IRA contribution based on income and filing status
+export const getMaxRothIraContribution = (income: number, age: number, maritalStatus: 'single' | 'married-jointly' | 'married-separately'): number => {
+  const statusMap = {
+    'single': 'single',
+    'married-jointly': 'marriedJointly',
+    'married-separately': 'marriedSeparately'
+  } as const;
+  
+  const limits = ROTH_IRA_INCOME_LIMITS[statusMap[maritalStatus]];
+  const isOver50 = age >= 50;
+  
+  for (const limit of limits) {
+    if (income >= limit.min && income < limit.max) {
+      return isOver50 ? limit.maxContribution50Plus : limit.maxContribution;
+    }
+  }
+  
+  return 0; // Income too high
 };
 
 // Tax rates

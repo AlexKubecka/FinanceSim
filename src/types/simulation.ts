@@ -11,17 +11,22 @@ export type RiskTolerance = 'conservative' | 'moderate' | 'aggressive';
 
 export type Contribution401kType = 'traditional' | 'roth';
 
+export type MaritalStatus = 'single' | 'married-jointly' | 'married-separately';
+
 // Personal financial data interface
 export interface PersonalFinancialData {
   age: number;
   currentSalary: number;
   state: string;
   careerField: CareerField;
+  maritalStatus: MaritalStatus;
   match401k: number;
   contributions401k: number; // DEPRECATED
   contributions401kTraditional: number;
   contributions401kRoth: number;
   contribution401kType: Contribution401kType; // DEPRECATED
+  iraTraditionalContribution: number;
+  iraRothContribution: number;
   cashBonus: number;
   stockBonus: number;
   savings: number;
@@ -106,6 +111,9 @@ export interface TaxCalculationResult {
   contribution401kTraditional: number;
   contribution401kRoth: number;
   totalContribution401k: number;
+  iraTraditionalContribution: number;
+  iraRothContribution: number;
+  totalIraContribution: number;
   taxableIncome: number;
 }
 
@@ -189,6 +197,8 @@ export interface UseTaxCalculationReturn {
     state?: string,
     contribution401kTraditional?: number,
     contribution401kRoth?: number,
+    iraTraditionalContribution?: number,
+    iraRothContribution?: number,
     year?: number
   ) => TaxCalculationResult;
   get401kLimit: (year?: number) => number;

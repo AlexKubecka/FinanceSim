@@ -194,19 +194,19 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({
           <div className="grid md:grid-cols-3 gap-6">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h3 className="font-semibold text-blue-800 mb-2">Monthly Rent</h3>
-              <p className="text-2xl font-bold text-blue-900">${currentStateRent.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-blue-900">${currentStateRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-blue-700">
                 {isUsingCustomRent ? 'Your custom amount' : 'State average'}
               </p>
               {isUsingCustomRent && defaultStateRent > 0 && (
                 <p className="text-xs text-gray-600 mt-1">
-                  State avg: ${defaultStateRent.toLocaleString()}
+                  State avg: ${defaultStateRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                 </p>
               )}
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <h3 className="font-semibold text-green-800 mb-2">Annual Housing Cost</h3>
-              <p className="text-2xl font-bold text-green-900">${annualRent.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-green-900">${annualRent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-green-700">Per year</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
@@ -294,7 +294,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({
             </div>
             <div className="bg-yellow-50 p-4 rounded-lg">
               <h3 className="font-semibold text-yellow-800 mb-2">Annual Food Cost</h3>
-              <p className="text-2xl font-bold text-yellow-900">${annualGrocery.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-yellow-900">${annualGrocery.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-yellow-700">Per year</p>
             </div>
             <div className="bg-red-50 p-4 rounded-lg">
@@ -317,7 +317,7 @@ export const ExpensesPage: React.FC<ExpensesPageProps> = ({
           <div className="grid md:grid-cols-2 gap-6">
             <div className="bg-orange-50 p-4 rounded-lg">
               <h3 className="font-semibold text-orange-800 mb-2">Total Annual Expenses</h3>
-              <p className="text-3xl font-bold text-orange-900">${totalAnnualExpenses.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-orange-900">${totalAnnualExpenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
               <p className="text-sm text-orange-700">Housing + Food costs</p>
             </div>
             <div className="bg-indigo-50 p-4 rounded-lg">

@@ -25,3 +25,76 @@
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all duration-200;
   }
 }
+
+/* Investment Bar Chart Styles */
+.bar-chart {
+  @apply flex flex-col items-center space-y-4;
+}
+
+.bar-container {
+  @apply flex items-end space-x-2 h-32;
+}
+
+.bar {
+  @apply w-8 min-h-[4px] rounded-t transition-all duration-500;
+}
+
+.bar.employee-contribution {
+  @apply bg-blue-500;
+}
+
+.bar.company-match {
+  @apply bg-green-500;
+}
+
+.bar.traditional-ira {
+  @apply bg-purple-500;
+}
+
+.bar.roth-ira {
+  @apply bg-pink-500;
+}
+
+.chart-labels {
+  @apply w-full;
+}
+
+.chart-stats {
+  @apply space-y-2;
+}
+
+.stat-item {
+  @apply flex items-center justify-between text-sm;
+}
+
+.stat-item.total {
+  @apply font-semibold text-base border-t pt-2;
+}
+
+.stat-item.limit {
+  @apply text-gray-600;
+}
+
+.stat-color {
+  @apply w-3 h-3 rounded mr-2;
+}
+
+.stat-color.employee-contribution {
+  @apply bg-blue-500;
+}
+
+.stat-color.company-match {
+  @apply bg-green-500;
+}
+
+.stat-color.traditional-ira {
+  @apply bg-purple-500;
+}
+
+.stat-color.roth-ira {
+  @apply bg-pink-500;
+}
+
+.warning {
+  @apply text-orange-600 text-sm font-medium bg-orange-50 p-2 rounded border border-orange-200;
+}

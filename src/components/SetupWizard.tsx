@@ -108,6 +108,20 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Marital Status</label>
+                <select
+                  value={personalData.maritalStatus}
+                  onChange={(e) => setPersonalData(prev => ({ ...prev, maritalStatus: e.target.value as 'single' | 'married-jointly' | 'married-separately' }))}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                >
+                  <option value="single">Single</option>
+                  <option value="married-jointly">Married Filing Jointly</option>
+                  <option value="married-separately">Married Filing Separately</option>
+                </select>
+                <p className="text-sm text-gray-500 mt-1">This affects IRA contribution limits</p>
+              </div>
+
               {/* Developer Autofill Section */}
               {onDeveloperAutofill && process.env.NODE_ENV === 'development' && (
                 <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
