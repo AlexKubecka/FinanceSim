@@ -4,7 +4,7 @@ import { PersonalFinancialData } from '../types/simulation';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { get401kLimit } from '../utils/financialCalculations';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface SetupWizardProps {
   // Personal data state

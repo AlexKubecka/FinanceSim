@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3, PiggyBank } from 'lucide-react';
+import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3, PiggyBank, FileText } from 'lucide-react';
 import { 
   PersonalFinancialData, 
   SimulationProgress, 
@@ -12,7 +12,7 @@ import { SimulationControls } from './SimulationControls';
 import { ProgressTimeline } from './ProgressTimeline';
 import { LifeProgressBar } from './LifeProgressBar';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface TaxInfo {
   totalTax: number;
@@ -553,6 +553,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </>
               );
             })()}
+          </div>
+        </div>
+
+        {/* Yearly Reports Card */}
+        <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
+             onClick={() => setCurrentMode('reports')}>
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mr-4">
+              <FileText className="h-6 w-6 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Yearly Reports</h3>
+              <p className="text-sm text-gray-600">Historical analysis</p>
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-indigo-600 mb-2">
+            {personalData.yearlySummaries.length}
+          </div>
+          
+          <p className="text-sm text-gray-500 mb-3">
+            {personalData.yearlySummaries.length === 0 
+              ? "No reports yet" 
+              : personalData.yearlySummaries.length === 1 
+              ? "1 year completed" 
+              : `${personalData.yearlySummaries.length} years completed`}
+          </p>
+          
+          {/* Reports Preview */}
+          <div className="mt-4 h-16 bg-indigo-50 rounded p-2 flex items-center justify-center">
+            <BarChart3 className="h-6 w-6 text-indigo-400" />
+            <span className="ml-2 text-sm text-indigo-600">
+              {personalData.yearlySummaries.length > 0 ? "View detailed reports" : "Start simulation to generate"}
+            </span>
           </div>
         </div>
       </div>

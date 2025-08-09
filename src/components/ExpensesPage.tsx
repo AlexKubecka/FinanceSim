@@ -4,7 +4,7 @@ import { PersonalFinancialData, SimulationProgress, FinancialState } from '../ty
 import { SimulationControls } from './SimulationControls';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface ExpensesPageProps {
   // Core data

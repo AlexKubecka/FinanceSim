@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Globe, Target, DollarSign, Receipt, TrendingUp } from 'lucide-react';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface ModeSelectionPageProps {
   setCurrentMode: React.Dispatch<React.SetStateAction<SimulationMode>>;

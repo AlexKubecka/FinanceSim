@@ -7,10 +7,13 @@ import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { NetWorthPage } from '../components/NetWorthPage';
 import InvestmentsPage from '../components/InvestmentsPage';
 import { BankAccountPage } from '../components/BankAccountPage';
+import { YearEndSummaryModal } from '../components/YearEndSummaryModal';
+import { YearEndReportsPage } from '../components/YearEndReportsPage';
 import { get401kLimit } from '../utils/financialCalculations';
 import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
+import { generateYearlySummary } from '../utils/yearlySummaryGenerator';
 import { 
   SimulationMode, 
   SimulationState, 
@@ -19,6 +22,7 @@ import {
   HistoricalDataPoint, 
   EconomicState
 } from '../types/simulation';
+import { YearlySummary } from '../types/yearlySummary';
 // import InvestmentPage from '../components/InvestmentPage';
 
 // Add Edit3 icon for the edit button
@@ -57,7 +61,9 @@ export const LifeSimulator: React.FC = () => {
     emergencyFundMonths: 6,
     riskTolerance: 'moderate',
     monthlyInvestment: 0,
-    plannedPurchases: []
+    plannedPurchases: [],
+    yearlySummaries: [],
+    wasRunningBeforeModal: false
   });
 
   // Simulation state
@@ -74,6 +80,10 @@ export const LifeSimulator: React.FC = () => {
 
   // Chart state
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+  
+  // Yearly summary modal state
+  const [showYearEndModal, setShowYearEndModal] = useState(false);
+  const [currentYearlySummary, setCurrentYearlySummary] = useState<YearlySummary | null>(null);
 
   // Economic state
   const [economicState, setEconomicState] = useState<EconomicState>(createInitialEconomicState());
@@ -90,6 +100,12 @@ export const LifeSimulator: React.FC = () => {
 
   // Store original salary to reset to after inflation adjustments
   const originalSalaryRef = useRef<number>(0);
+  
+  // Track simulation state with a ref for immediate access in intervals
+  const simulationStateRef = useRef<SimulationState>('setup');
+  
+  // Track current simulation year (starts at 0, increments to 1, 2, 3, etc.)
+  const currentYearRef = useRef<number>(0);
 
   // Financial tracking
   const [financials, setFinancials] = useState({
@@ -146,6 +162,14 @@ export const LifeSimulator: React.FC = () => {
 
   // Main simulation step function
   const runSimulationStep = () => {
+    console.log('🔄 Running simulation step...', { state: simulationStateRef.current, intervalExists: !!intervalRef.current });
+    
+    // Guard: Don't run if simulation is not in running state
+    if (simulationStateRef.current !== 'running') {
+      console.log('⏸️ Simulation step aborted - not in running state:', simulationStateRef.current);
+      return;
+    }
+    
     let newAge = simulationProgress.currentAge;
     
     // Use the current ref value as the previous year for YoY calculation
@@ -168,12 +192,29 @@ export const LifeSimulator: React.FC = () => {
     yearsInCurrentCycleRef.current = newEconomicState.yearsInCurrentCycle;
     currentEconomicCycleRef.current = newEconomicState.economicCycle;
     
+    // Increment the year counter
+    currentYearRef.current += 1;
+    let currentSimulationYear = currentYearRef.current;
+    
     setSimulationProgress(prev => {
       const newDate = new Date(prev.currentDate.getTime() + (365 * 24 * 60 * 60 * 1000)); // Add exactly 1 year
       const yearsElapsed = Math.floor((newDate.getTime() - prev.startDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
-      const monthsElapsed = yearsElapsed * 12;
-      const currentAge = personalData.age + yearsElapsed;
+      const monthsElapsed = currentYearRef.current * 12; // Use simple year counter
+      const currentAge = personalData.age + currentYearRef.current; // Use simple year counter for age
       newAge = currentAge;
+      
+      // Store the current simulation year (which starts at 1)
+      currentSimulationYear = currentYearRef.current;
+      
+      console.log('📊 Debug Year Calculation:', {
+        yearsElapsed,
+        currentSimulationYear,
+        currentYearRef: currentYearRef.current,
+        startDate: prev.startDate,
+        newDate,
+        personalDataAge: personalData.age,
+        newAge: currentAge
+      });
 
       return {
         ...prev,
@@ -186,7 +227,15 @@ export const LifeSimulator: React.FC = () => {
     });
 
     // Calculate the current simulation year for debug logging (starts at 1)
-    const debugYear = newAge - personalData.age;
+    const debugYear = currentSimulationYear;
+    
+    console.log('📊 Generating yearly summary:', {
+      debugYear,
+      currentSimulationYear,
+      newAge: personalData.age + currentYearRef.current, // Show correct age in debug
+      personalDataAge: personalData.age,
+      currentYearRef: currentYearRef.current
+    });
 
     // Update financials with inflation effects
     setPersonalData(prev => {
@@ -425,6 +474,74 @@ export const LifeSimulator: React.FC = () => {
       return [...prev, newPoint];
     });
 
+    // Generate yearly summary at the end of each year
+    const previousYearData = historicalData.length > 0 ? historicalData[historicalData.length - 1] : null;
+    const startingYearData = previousYearData || {
+      age: personalData.age,
+      netWorth: 0,
+      salary: personalData.currentSalary,
+      investments: 0,
+      debt: personalData.debtAmount,
+      timestamp: new Date(simulationProgress.startDate),
+      inflation: 0,
+      stockMarketValue: 5000
+    };
+
+    const currentYearData = {
+      age: personalData.age + currentYearRef.current, // Use simple counter for age
+      netWorth: calculatedNetWorth,
+      salary: personalData.currentSalary,
+      investments: newInvestmentValue,
+      debt: personalData.debtAmount,
+      timestamp: new Date(),
+      inflation: newEconomicState.currentInflationRate,
+      stockMarketValue: newEconomicState.stockMarketIndex
+    };
+
+    const yearlySummary = generateYearlySummary(
+      debugYear,
+      startingYearData,
+      currentYearData,
+      personalData,
+      financials,
+      newEconomicState,
+      {
+        ...taxInfo,
+        iraTraditionalContribution: personalData.iraTraditionalContribution,
+        iraRothContribution: personalData.iraRothContribution,
+        totalIraContribution: personalData.iraTraditionalContribution + personalData.iraRothContribution
+      },
+      personalData.yearlySummaries.length > 0 ? personalData.yearlySummaries[personalData.yearlySummaries.length - 1] : undefined
+    );
+
+    // Pause simulation before showing modal - do it directly to ensure it happens immediately
+    const wasRunning = simulationStateRef.current === 'running';
+    if (wasRunning) {
+      console.log('📊 Year End: Pausing simulation for yearly summary modal');
+      // Stop the interval immediately
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // Set state to paused
+      setSimulationState('paused');
+      simulationStateRef.current = 'paused'; // Update ref immediately
+    } else {
+      console.log('📊 Year End: Simulation was not running, showing modal without pause');
+    }
+
+    // Show the yearly summary modal
+    setCurrentYearlySummary(yearlySummary);
+    setShowYearEndModal(true);
+
+    // Save the yearly summary to personal data
+    setPersonalData(prev => ({
+      ...prev,
+      yearlySummaries: [...prev.yearlySummaries, yearlySummary],
+      // Store if simulation was running before modal to resume later
+      wasRunningBeforeModal: wasRunning
+    }));
+
     // Check if simulation should end
     if (newAge >= personalData.retirementAge) {
       stopSimulation();
@@ -434,6 +551,7 @@ export const LifeSimulator: React.FC = () => {
   // Simulation controls
   const startSimulation = () => {
     setSimulationState('running');
+    simulationStateRef.current = 'running'; // Update ref immediately
     
     // Only reset simulation progress if this is the very first start
     if (!hasStarted) {
@@ -506,6 +624,7 @@ export const LifeSimulator: React.FC = () => {
 
   const pauseSimulation = () => {
     setSimulationState('paused');
+    simulationStateRef.current = 'paused'; // Update ref immediately
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -514,6 +633,7 @@ export const LifeSimulator: React.FC = () => {
 
   const stopSimulation = () => {
     setSimulationState('setup');
+    simulationStateRef.current = 'setup'; // Update ref immediately
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -825,7 +945,9 @@ export const LifeSimulator: React.FC = () => {
       stockBonus: Math.floor(Math.random() * 15000),
       emergencyFundMonths: 6,
       riskTolerance: 'moderate' as const,
-      plannedPurchases: []
+      plannedPurchases: [],
+      yearlySummaries: [],
+      wasRunningBeforeModal: false
     }));
     
     // Set financials to match
@@ -947,12 +1069,11 @@ export const LifeSimulator: React.FC = () => {
 
   // Calculate total annual expenses
   const calculateAnnualExpenses = (): number => {
-    // Use custom rent if provided, otherwise use state/user average
-    const monthlyRent = personalData.monthlyRent ?? (personalData.state ? getCurrentRent(personalData.state) : 0);
+    // Use the same logic as expenses page - getCurrentRent and getCurrentGrocery already handle custom values
+    const monthlyRent = personalData.state ? getCurrentRent(personalData.state) : 0;
     const annualRent = monthlyRent * 12;
     
-    // Use custom groceries if provided, otherwise use state/user average
-    const weeklyGroceries = personalData.weeklyGroceries ?? (personalData.state ? getCurrentGrocery(personalData.state) : 0);
+    const weeklyGroceries = personalData.state ? getCurrentGrocery(personalData.state) : 0;
     const annualGrocery = weeklyGroceries * 52; // Weekly to annual
     
     return annualRent + annualGrocery;
@@ -2512,6 +2633,13 @@ export const LifeSimulator: React.FC = () => {
         );
       case 'economy':
         return renderEconomyPage();
+      case 'reports':
+        return (
+          <YearEndReportsPage
+            yearlySummaries={personalData.yearlySummaries}
+            setCurrentMode={setCurrentMode}
+          />
+        );
       case 'realistic':
         return renderRealisticMode();
       case 'custom':
@@ -2602,6 +2730,38 @@ export const LifeSimulator: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {renderCurrentMode()}
+      
+      {/* Year End Summary Modal */}
+      {showYearEndModal && currentYearlySummary && (
+        <YearEndSummaryModal
+          isOpen={showYearEndModal}
+          summary={currentYearlySummary}
+          allYearlySummaries={personalData.yearlySummaries}
+          onClose={() => {
+            console.log('📊 Year End: Modal closed via X button - not resuming simulation');
+            setShowYearEndModal(false);
+            // Don't resume simulation when closing via X button
+          }}
+          onContinueSimulation={() => {
+            setShowYearEndModal(false);
+            // Resume simulation if it was running before modal appeared
+            if (personalData.wasRunningBeforeModal) {
+              console.log('📊 Year End: Resuming simulation after continue button');
+              // Use setTimeout to ensure modal closes first
+              setTimeout(() => {
+                startSimulation();
+                // Clear the flag
+                setPersonalData(prev => ({
+                  ...prev,
+                  wasRunningBeforeModal: false
+                }));
+              }, 100);
+            } else {
+              console.log('📊 Year End: Not resuming simulation (was not running before modal)');
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

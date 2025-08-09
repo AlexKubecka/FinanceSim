@@ -7,7 +7,7 @@ import {
 } from '../types/simulation';
 import { SimulationControls } from './SimulationControls';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface TaxInfo {
   totalTax: number;

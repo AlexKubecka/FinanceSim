@@ -1,5 +1,8 @@
+// Import yearly summary types
+import type { YearlySummary } from './yearlySummary';
+
 // Core simulation types
-export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
+export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 export type SimulationState = 'setup' | 'running' | 'paused' | 'completed';
 
@@ -49,6 +52,10 @@ export interface PersonalFinancialData {
   riskTolerance: RiskTolerance;
   monthlyInvestment: number;
   plannedPurchases: PlannedPurchase[];
+  // Yearly summaries for historical tracking
+  yearlySummaries: YearlySummary[];
+  // Track if simulation was running before modal appeared
+  wasRunningBeforeModal?: boolean;
 }
 
 // Planned purchase interface
