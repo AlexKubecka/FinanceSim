@@ -1,10 +1,10 @@
 import React from 'react';
 import { User, Code } from 'lucide-react';
 import { PersonalFinancialData } from '../types/simulation';
-import { stateRentData } from '../utils/expenseData';
+import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { get401kLimit } from '../utils/financialCalculations';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
 
 interface SetupWizardProps {
   // Personal data state
@@ -71,6 +71,12 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
               setupStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
             }`}>
               2
+            </div>
+            <div className={`w-16 h-1 ${setupStep >= 3 ? 'bg-blue-600' : 'bg-gray-300'}`}></div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+              setupStep >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
+            }`}>
+              3
             </div>
           </div>
         </div>
@@ -310,11 +316,247 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                 <button
                   onClick={() => {
                     if (personalData.currentSalary && personalData.careerField) {
-                      setSetupCompleted(true);
+                      setSetupStep(3);
                     }
                   }}
                   disabled={!personalData.currentSalary || !personalData.careerField}
                   className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-lg font-semibold"
+                >
+                  Next: Financial Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {setupStep === 3 && (
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">Financial Details & IRA Information</h2>
+            <p className="text-center text-gray-600 mb-8">
+              Let's add some optional details to make your simulation more accurate. 
+              <br />
+              <span className="text-sm text-gray-500">All fields are optional - we'll use state averages if you leave them blank.</span>
+            </p>
+            
+            <div className="space-y-6">
+              {/* Expense Information */}
+              <div className="p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <span className="mr-2">🏠</span>
+                  Living Expenses
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Monthly Rent (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      value={personalData.monthlyRent || ''}
+                      onChange={(e) => {
+                        const rent = parseFloat(e.target.value) || undefined;
+                        setPersonalData(prev => ({ ...prev, monthlyRent: rent }));
+                      }}
+                      placeholder={`State average: $${personalData.state ? stateRentData[personalData.state]?.toLocaleString() || 'N/A' : 'Select state first'}`}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                      min="0"
+                      step="50"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      If left blank, we'll use your state's average rent
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Weekly Groceries (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      value={personalData.weeklyGroceries || ''}
+                      onChange={(e) => {
+                        const groceries = parseFloat(e.target.value) || undefined;
+                        setPersonalData(prev => ({ ...prev, weeklyGroceries: groceries }));
+                      }}
+                      placeholder={`State average: $${personalData.state ? stateGroceryData[personalData.state]?.toLocaleString() || 'N/A' : 'Select state first'}`}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                      min="0"
+                      step="5"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      If left blank, we'll use your state's average grocery costs
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Savings */}
+              <div className="p-6 bg-green-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <span className="mr-2">💵</span>
+                  Current Savings
+                </h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Starting Cash Savings Balance
+                  </label>
+                  <input
+                    type="number"
+                    value={personalData.savingsAccount || ''}
+                    onChange={(e) => {
+                      const savings = parseFloat(e.target.value) || 0;
+                      setPersonalData(prev => ({ 
+                        ...prev, 
+                        savings: 0, // Clear legacy field to prevent double counting
+                        // Initialize bank account system with savings going to savings account
+                        savingsAccount: Math.max(0, savings),
+                        checkingAccount: 0,
+                        hysaAccount: 0
+                      }));
+                    }}
+                    placeholder="Current savings balance"
+                    className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                    min="0"
+                    step="100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Your current cash savings (will be placed in Savings Account initially - you can move to HYSA for better returns!)
+                  </p>
+                </div>
+              </div>
+
+              {/* IRA Information */}
+              <div className="p-6 bg-blue-50 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <span className="mr-2">💰</span>
+                  IRA Accounts
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Current Traditional IRA Balance
+                      </label>
+                      <input
+                        type="number"
+                        value={personalData.iraTraditionalHoldings || ''}
+                        onChange={(e) => {
+                          const holdings = parseFloat(e.target.value) || 0;
+                          setPersonalData(prev => ({ ...prev, iraTraditionalHoldings: Math.max(0, holdings) }));
+                        }}
+                        placeholder="Current balance"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        min="0"
+                        step="100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Your current traditional IRA account balance
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Current Roth IRA Balance
+                      </label>
+                      <input
+                        type="number"
+                        value={personalData.iraRothHoldings || ''}
+                        onChange={(e) => {
+                          const holdings = parseFloat(e.target.value) || 0;
+                          setPersonalData(prev => ({ ...prev, iraRothHoldings: Math.max(0, holdings) }));
+                        }}
+                        placeholder="Current balance"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        min="0"
+                        step="100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Your current Roth IRA account balance
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Annual Traditional IRA Contribution
+                      </label>
+                      <input
+                        type="number"
+                        value={personalData.iraTraditionalContribution || ''}
+                        onChange={(e) => {
+                          const contribution = parseFloat(e.target.value) || 0;
+                          const iraLimit = 7000; // 2024 IRA contribution limit
+                          const maxTraditional = Math.max(0, iraLimit - (personalData.iraRothContribution || 0));
+                          setPersonalData(prev => ({ 
+                            ...prev, 
+                            iraTraditionalContribution: Math.max(0, Math.min(maxTraditional, contribution))
+                          }));
+                        }}
+                        placeholder="Annual contribution"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        min="0"
+                        step="100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Pre-tax contribution (2024 limit: $7,000)
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Annual Roth IRA Contribution
+                      </label>
+                      <input
+                        type="number"
+                        value={personalData.iraRothContribution || ''}
+                        onChange={(e) => {
+                          const contribution = parseFloat(e.target.value) || 0;
+                          const iraLimit = 7000; // 2024 IRA contribution limit
+                          const maxRoth = Math.max(0, iraLimit - (personalData.iraTraditionalContribution || 0));
+                          setPersonalData(prev => ({ 
+                            ...prev, 
+                            iraRothContribution: Math.max(0, Math.min(maxRoth, contribution))
+                          }));
+                        }}
+                        placeholder="Annual contribution"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                        min="0"
+                        step="100"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        After-tax contribution (2024 limit: $7,000 combined)
+                      </p>
+                    </div>
+                  </div>
+
+                  {((personalData.iraTraditionalContribution || 0) + (personalData.iraRothContribution || 0)) > 0 && (
+                    <div className="p-3 bg-blue-100 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        Total IRA Contributions: ${((personalData.iraTraditionalContribution || 0) + (personalData.iraRothContribution || 0)).toLocaleString()} annually
+                        <span className="block text-xs">
+                          IRS limit: $7,000 combined ({((personalData.iraTraditionalContribution || 0) + (personalData.iraRothContribution || 0)) > 7000 ? 'OVER LIMIT' : 'within limit'})
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setSetupStep(2)}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors text-lg font-semibold"
+                >
+                  ← Previous
+                </button>
+                
+                <button
+                  onClick={() => setSetupCompleted(true)}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
                 >
                   Start Simulation
                 </button>

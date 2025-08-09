@@ -37,15 +37,28 @@ export const calculateInvestmentBreakdown = (
                                    personalData.iraTraditionalContribution + personalData.iraRothContribution + 
                                    annualTaxableInvestment;
 
+  // Total starting IRA holdings
+  const totalStartingIraHoldings = (personalData.iraTraditionalHoldings || 0) + (personalData.iraRothHoldings || 0);
+  
+  // For initial calculation (when currentInvestmentValue equals starting investments + IRA holdings):
+  // If currentInvestmentValue equals the sum of starting values, we're at the beginning
+  const isInitialState = currentInvestmentValue === (personalData.investments + totalStartingIraHoldings);
+  
+  // Total investment value available for 401k and taxable accounts (excluding IRA starting balances)
+  const non401kInvestmentValue = Math.max(0, currentInvestmentValue - totalStartingIraHoldings);
+
   // Helper function to calculate account balance based on contribution proportion
   const calculateAccountBalance = (annualContribution: number, totalAnnualContributions: number) => {
-    // If no starting investment value exists, all balances should be 0
-    if (currentInvestmentValue === 0) return 0;
+    // If we're in initial state and have no other investments, just return 0 for 401k/taxable
+    if (isInitialState && personalData.investments === 0) return 0;
+    
+    // If no available investment value exists, all balances should be 0
+    if (non401kInvestmentValue === 0) return 0;
     if (annualContribution === 0 || totalAnnualContributions === 0) return 0;
     
-    // Allocate the total investment value proportionally based on annual contributions
+    // Allocate the available investment value proportionally based on annual contributions
     const proportion = annualContribution / totalAnnualContributions;
-    return currentInvestmentValue * proportion;
+    return non401kInvestmentValue * proportion;
   };
 
   // Calculate individual account balances
@@ -61,12 +74,13 @@ export const calculateInvestmentBreakdown = (
     totalAnnualContributions
   );
   
-  const traditionalIraBalance = calculateAccountBalance(
+  // IRA balances: always show starting holdings, plus any allocated growth
+  const traditionalIraBalance = (personalData.iraTraditionalHoldings || 0) + calculateAccountBalance(
     personalData.iraTraditionalContribution, 
     totalAnnualContributions
   );
   
-  const rothIraBalance = calculateAccountBalance(
+  const rothIraBalance = (personalData.iraRothHoldings || 0) + calculateAccountBalance(
     personalData.iraRothContribution, 
     totalAnnualContributions
   );

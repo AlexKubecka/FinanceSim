@@ -250,7 +250,7 @@ const NetWorthChart: React.FC<NetWorthChartProps> = ({ data }) => {
   );
 };
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
 
 interface NetWorthPageProps {
   // Core data
@@ -291,13 +291,25 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   // Calculate investment breakdown using centralized utility
   const investmentBreakdown = calculateInvestmentBreakdown(personalData, financials.investmentAccountValue || 0);
 
-  // Calculate net worth components
+  // Calculate bank account balances (with backwards compatibility)
+  const savingsBalance = personalData.savingsAccount ?? 0;
+  const checkingBalance = personalData.checkingAccount ?? 0;
+  const hysaBalance = personalData.hysaAccount ?? 0;
+  const legacySavings = personalData.savings ?? 0;
+
+  // Calculate net worth components - avoid double counting by only including individual accounts
   const assets = {
-    cash: personalData.savings || 0,
+    savings: savingsBalance,
+    checking: checkingBalance,
+    hysa: hysaBalance,
+    legacy: legacySavings, // For backwards compatibility
     investments: financials.investmentAccountValue || 0, // Use current investment value, not initial
     retirement: 0, // Could be calculated from 401k contributions over time
     other: 0
   };
+
+  // Calculate total cash for display purposes
+  const totalCash = savingsBalance + checkingBalance + hysaBalance + legacySavings;
 
   const liabilities = {
     debt: personalData.debtAmount || 0,
@@ -418,29 +430,103 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
           <PiggyBank className="h-6 w-6 text-green-600 mr-2" />
           Assets Breakdown
         </h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-blue-800 mb-2">Cash & Savings</h3>
-            <p className="text-2xl font-bold text-blue-900">${assets.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-            <p className="text-sm text-blue-700">{totalAssets > 0 ? ((assets.cash / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+        
+        {/* Bank Accounts Detailed Breakdown */}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">💵 Bank Accounts</h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            {/* Savings Account */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
+                <PiggyBank className="h-4 w-4 mr-1" />
+                Savings Account
+              </h4>
+              <p className="text-xl font-bold text-blue-900">${assets.savings.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-xs text-blue-700">APY: 0.05%</p>
+              <p className="text-sm text-blue-700">{totalAssets > 0 ? ((assets.savings / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+              {assets.savings > 0 && (
+                <p className="text-xs text-orange-600 mt-1">💡 Consider HYSA for better returns</p>
+              )}
+            </div>
+
+            {/* Checking Account */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-green-800 mb-2 flex items-center">
+                <Wallet className="h-4 w-4 mr-1" />
+                Checking Account
+              </h4>
+              <p className="text-xl font-bold text-green-900">${assets.checking.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-xs text-green-700">APY: 0%</p>
+              <p className="text-sm text-green-700">{totalAssets > 0 ? ((assets.checking / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+              <p className="text-xs text-gray-600 mt-1">For daily expenses</p>
+            </div>
+
+            {/* HYSA Account */}
+            <div className="bg-purple-50 p-4 rounded-lg relative">
+              <h4 className="font-semibold text-purple-800 mb-2 flex items-center">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                High Yield Savings
+              </h4>
+              <p className="text-xl font-bold text-purple-900">${assets.hysa.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-xs text-purple-700">APY: 4.0%</p>
+              <p className="text-sm text-purple-700">{totalAssets > 0 ? ((assets.hysa / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+              <span className="absolute top-2 right-2 bg-purple-200 text-purple-800 text-xs px-1 py-0.5 rounded">
+                🏆 Best Rate
+              </span>
+            </div>
+
+            {/* Total Cash */}
+            <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300">
+              <h4 className="font-semibold text-gray-800 mb-2">Total Cash & Savings</h4>
+              <p className="text-xl font-bold text-gray-900">${totalCash.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-xs text-gray-700">All bank accounts</p>
+              <p className="text-sm text-gray-700">{totalAssets > 0 ? ((totalCash / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+            </div>
           </div>
-          
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-green-800 mb-2">Total Investments</h3>
-            <p className="text-2xl font-bold text-green-900">${assets.investments.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-            <p className="text-sm text-green-700">{totalAssets > 0 ? ((assets.investments / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
-          </div>
-          
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-purple-800 mb-2">Retirement (401k)</h3>
-            <p className="text-2xl font-bold text-purple-900">${assets.retirement.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-            <p className="text-sm text-purple-700">{totalAssets > 0 ? ((assets.retirement / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
-          </div>
-          
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-gray-800 mb-2">Other Assets</h3>
-            <p className="text-2xl font-bold text-gray-900">${assets.other.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-            <p className="text-sm text-gray-700">{totalAssets > 0 ? ((assets.other / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+
+          {/* Annual Interest Earnings Breakdown */}
+          {totalCash > 0 && (
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-yellow-800 mb-2">📊 Annual Interest Earnings</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-blue-700">Savings: ${(assets.savings * 0.0005).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                </div>
+                <div>
+                  <p className="text-green-700">Checking: $0</p>
+                </div>
+                <div>
+                  <p className="text-purple-700">HYSA: ${(assets.hysa * 0.04).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                </div>
+                <div className="font-bold">
+                  <p className="text-yellow-800">Total: ${((assets.savings * 0.0005) + (assets.hysa * 0.04)).toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Investment Assets */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 Investment Assets</h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-green-800 mb-2">Total Investments</h4>
+              <p className="text-2xl font-bold text-green-900">${assets.investments.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-green-700">{totalAssets > 0 ? ((assets.investments / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-purple-800 mb-2">Retirement (401k)</h4>
+              <p className="text-2xl font-bold text-purple-900">${assets.retirement.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-purple-700">{totalAssets > 0 ? ((assets.retirement / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-semibold text-gray-800 mb-2">Other Assets</h4>
+              <p className="text-2xl font-bold text-gray-900">${assets.other.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              <p className="text-sm text-gray-700">{totalAssets > 0 ? ((assets.other / totalAssets) * 100).toFixed(1) : 0}% of assets</p>
+            </div>
           </div>
         </div>
       </div>
@@ -585,11 +671,11 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
           <div className="text-center">
             <h3 className="font-semibold text-gray-800 mb-2">Liquidity Ratio</h3>
             <p className="text-3xl font-bold text-blue-600">
-              {totalAssets > 0 ? ((assets.cash / totalAssets) * 100).toFixed(1) : 0}%
+              {totalAssets > 0 ? ((totalCash / totalAssets) * 100).toFixed(1) : 0}%
             </p>
             <p className="text-sm text-gray-600 mt-1">
-              {totalAssets > 0 && (assets.cash / totalAssets) >= 0.1 && (assets.cash / totalAssets) <= 0.3 ? 'Balanced' : 
-               totalAssets > 0 && (assets.cash / totalAssets) < 0.1 ? 'Low Liquidity' : 'High Cash Holdings'}
+              {totalAssets > 0 && (totalCash / totalAssets) >= 0.1 && (totalCash / totalAssets) <= 0.3 ? 'Balanced' : 
+               totalAssets > 0 && (totalCash / totalAssets) < 0.1 ? 'Low Liquidity' : 'High Cash Holdings'}
             </p>
           </div>
         </div>

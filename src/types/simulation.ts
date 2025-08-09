@@ -1,5 +1,5 @@
 // Core simulation types
-export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
+export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
 
 export type SimulationState = 'setup' | 'running' | 'paused' | 'completed';
 
@@ -27,9 +27,19 @@ export interface PersonalFinancialData {
   contribution401kType: Contribution401kType; // DEPRECATED
   iraTraditionalContribution: number;
   iraRothContribution: number;
+  // Enhanced expense tracking
+  monthlyRent?: number; // Optional, falls back to state average
+  weeklyGroceries?: number; // Optional, falls back to state average
+  // Enhanced IRA tracking
+  iraTraditionalHoldings: number; // Current traditional IRA balance
+  iraRothHoldings: number; // Current Roth IRA balance
   cashBonus: number;
   stockBonus: number;
-  savings: number;
+  savings: number; // DEPRECATED - keeping for backwards compatibility
+  // Enhanced bank account system
+  savingsAccount: number; // Traditional savings account (0.05% APY)
+  checkingAccount: number; // Checking account (0% APY)
+  hysaAccount: number; // High Yield Savings Account (4% APY)
   investments: number;
   debtAmount: number;
   debtInterestRate: number;

@@ -6,6 +6,7 @@ import { SetupWizard } from '../components/SetupWizard';
 import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { NetWorthPage } from '../components/NetWorthPage';
 import InvestmentsPage from '../components/InvestmentsPage';
+import { BankAccountPage } from '../components/BankAccountPage';
 import { get401kLimit } from '../utils/financialCalculations';
 import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
@@ -37,9 +38,17 @@ export const LifeSimulator: React.FC = () => {
     contribution401kType: 'traditional', // DEPRECATED
     iraTraditionalContribution: 0,
     iraRothContribution: 0,
+    monthlyRent: undefined, // Optional - uses state average if not set
+    weeklyGroceries: undefined, // Optional - uses state average if not set
+    iraTraditionalHoldings: 0,
+    iraRothHoldings: 0,
     cashBonus: 0,
     stockBonus: 0,
-    savings: 0,
+    savings: 0, // DEPRECATED - keeping for backwards compatibility
+    // Enhanced bank account system
+    savingsAccount: 0, // Traditional savings account (0.05% APY)
+    checkingAccount: 0, // Checking account (0% APY)
+    hysaAccount: 0, // High Yield Savings Account (4% APY)
     investments: 0,
     debtAmount: 0,
     debtInterestRate: 0,
@@ -276,17 +285,34 @@ export const LifeSimulator: React.FC = () => {
     // Annual cash flow = after-tax income - expenses - after-tax investment contributions
     const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses - afterTaxInvestmentContributions;
     
-    // Use ref to get current savings value and calculate new savings
-    const currentSavings = currentSavingsRef.current;
-    const updatedSavings = currentSavings + annualCashFlow;
+    // Handle bank account system: salary goes to savings account by default
+    // Apply interest to accounts: HYSA gets 4%, Savings gets 0.05%, Checking gets 0%
+    const currentSavingsAccount = personalData.savingsAccount ?? 0;
+    const currentCheckingAccount = personalData.checkingAccount ?? 0;
+    const currentHysaAccount = personalData.hysaAccount ?? 0;
     
-    // Update the ref with the new savings value for next iteration
-    currentSavingsRef.current = updatedSavings;
+    // Apply annual interest
+    const savingsInterest = currentSavingsAccount * 0.0005; // 0.05% APY
+    const hysaInterest = currentHysaAccount * 0.04; // 4% APY
     
-    // Update personalData with the new savings value immediately
+    // Add salary (cash flow) to savings account by default
+    const newSavingsAccount = currentSavingsAccount + annualCashFlow + savingsInterest;
+    const newCheckingAccount = currentCheckingAccount; // No interest
+    const newHysaAccount = currentHysaAccount + hysaInterest;
+    
+    // Calculate total bank balance for ref tracking and net worth
+    const newTotalBankBalance = Math.max(0, newSavingsAccount) + Math.max(0, newCheckingAccount) + Math.max(0, newHysaAccount);
+    
+    // Update the ref with the new total bank balance for next iteration
+    currentSavingsRef.current = newTotalBankBalance;
+    
+    // Update personalData with the new account values and clear legacy savings to prevent double counting
     setPersonalData(prev => ({
       ...prev,
-      savings: updatedSavings
+      savings: 0, // Clear legacy field to prevent double counting
+      savingsAccount: Math.max(0, newSavingsAccount),
+      checkingAccount: Math.max(0, newCheckingAccount),
+      hysaAccount: Math.max(0, newHysaAccount)
     }));
 
     // Calculate investment growth AFTER savings calculation
@@ -310,7 +336,7 @@ export const LifeSimulator: React.FC = () => {
     // Use the values that will be in the final state for consistency with display
     // Assets = Cash + Investments + Retirement + Other
     // Liabilities = Debt + Credit Cards + Loans + Other
-    const totalAssets = updatedSavings + newInvestmentValue + 0 + 0; // cash + investments + retirement + other
+    const totalAssets = newTotalBankBalance + newInvestmentValue + 0 + 0; // cash + investments + retirement + other
     const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other  
     const calculatedNetWorth = totalAssets - totalLiabilities;
 
@@ -347,16 +373,16 @@ export const LifeSimulator: React.FC = () => {
         monthlyInvestments: annualMonthlyInvestments,
         iraContributions: annualIraContributions,
         netCashFlow: annualCashFlow,
-        previousSavings: currentSavings,
-        newSavings: updatedSavings,
-        savingsChange: updatedSavings - currentSavings
+        previousBankBalance: currentSavingsRef.current - newTotalBankBalance + annualCashFlow, // Calculate previous from current
+        newBankBalance: newTotalBankBalance,
+        bankBalanceChange: annualCashFlow + savingsInterest + hysaInterest
       });
 
       // Debug logging for key financial values
       console.log('Key Financial Values Debug:', {
         year: debugYear,
         age: newAge,
-        updatedSavings: updatedSavings,
+        totalBankBalance: newTotalBankBalance,
         annualCashFlow: annualCashFlow,
         newInvestmentValue: newInvestmentValue,
         totalAssets: totalAssets,
@@ -389,10 +415,10 @@ export const LifeSimulator: React.FC = () => {
         age: newAge,
         netWorth: calculatedNetWorth,
         breakdown: {
-          savings: updatedSavings,
+          totalBankBalance: newTotalBankBalance,
           investments: newInvestmentValue,
           debt: personalData.debtAmount,
-          calculation: `${updatedSavings} + ${newInvestmentValue} - ${personalData.debtAmount} = ${calculatedNetWorth}`
+          calculation: `${newTotalBankBalance} + ${newInvestmentValue} - ${personalData.debtAmount} = ${calculatedNetWorth}`
         }
       });
       
@@ -416,11 +442,30 @@ export const LifeSimulator: React.FC = () => {
       // Store the original salary value before any inflation adjustments
       originalSalaryRef.current = personalData.currentSalary;
       
-      // Initialize investment ref with current investment value from personalData
-      currentInvestmentValueRef.current = personalData.investments;
+      // Initialize investment ref with current investment value plus IRA holdings from personalData
+      const totalStartingInvestments = personalData.investments + 
+        (personalData.iraTraditionalHoldings || 0) + 
+        (personalData.iraRothHoldings || 0);
+      currentInvestmentValueRef.current = totalStartingInvestments;
       
-      // Initialize savings ref with current savings value from personalData
-      currentSavingsRef.current = personalData.savings;
+      // Initialize savings ref with current total bank balance
+      const currentTotalBank = (personalData.savingsAccount ?? 0) + 
+                               (personalData.checkingAccount ?? 0) + 
+                               (personalData.hysaAccount ?? 0);
+      currentSavingsRef.current = currentTotalBank;
+      
+      // Migrate legacy savings to new account system if needed
+      if ((personalData.savings || 0) > 0 && 
+          (personalData.savingsAccount ?? 0) === 0 && 
+          (personalData.checkingAccount ?? 0) === 0 && 
+          (personalData.hysaAccount ?? 0) === 0) {
+        setPersonalData(prev => ({
+          ...prev,
+          savingsAccount: prev.savings || 0,
+          checkingAccount: 0,
+          hysaAccount: 0
+        }));
+      }
       
       setSimulationProgress(prev => ({
         ...prev,
@@ -434,7 +479,11 @@ export const LifeSimulator: React.FC = () => {
       
       // Initialize historical data with the starting point using proper net worth calculation
       // Same calculation as NetWorthPage: Total Assets - Total Liabilities
-      const totalAssets = personalData.savings + financials.investmentAccountValue + 0 + 0; // cash + investments + retirement + other
+      // Calculate total bank balance from new account system
+      const initialTotalBank = (personalData.savingsAccount ?? 0) + 
+                               (personalData.checkingAccount ?? 0) + 
+                               (personalData.hysaAccount ?? 0);
+      const totalAssets = initialTotalBank + financials.investmentAccountValue + 0 + 0; // cash + investments + retirement + other
       const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
       const initialNetWorth = totalAssets - totalLiabilities;
       
@@ -705,6 +754,10 @@ export const LifeSimulator: React.FC = () => {
         contributions401kRoth: 5,
         iraTraditionalContribution: 0,
         iraRothContribution: 3000,
+        monthlyRent: 2200, // Custom rent vs CA average of 2800
+        weeklyGroceries: 110, // Custom groceries vs CA average of 125
+        iraTraditionalHoldings: 5000,
+        iraRothHoldings: 8000,
         savings: 15000,
         investments: 5000,
         debtAmount: 25000,
@@ -724,6 +777,10 @@ export const LifeSimulator: React.FC = () => {
         contributions401kRoth: 0,
         iraTraditionalContribution: 7000,
         iraRothContribution: 0,
+        monthlyRent: undefined, // Will use TX state average
+        weeklyGroceries: undefined, // Will use TX state average
+        iraTraditionalHoldings: 45000,
+        iraRothHoldings: 15000,
         savings: 45000,
         investments: 35000,
         debtAmount: 15000,
@@ -743,6 +800,10 @@ export const LifeSimulator: React.FC = () => {
         contributions401kRoth: 2,
         iraTraditionalContribution: 0,
         iraRothContribution: 2000,
+        monthlyRent: 1400, // Custom rent vs FL average of 1750
+        weeklyGroceries: 95, // Custom groceries vs FL average of 108
+        iraTraditionalHoldings: 0,
+        iraRothHoldings: 3000,
         savings: 8000,
         investments: 2000,
         debtAmount: 35000,
@@ -886,11 +947,13 @@ export const LifeSimulator: React.FC = () => {
 
   // Calculate total annual expenses
   const calculateAnnualExpenses = (): number => {
-    const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
-    const annualRent = currentStateRent * 12;
+    // Use custom rent if provided, otherwise use state/user average
+    const monthlyRent = personalData.monthlyRent ?? (personalData.state ? getCurrentRent(personalData.state) : 0);
+    const annualRent = monthlyRent * 12;
     
-    const currentStateGrocery = personalData.state ? getCurrentGrocery(personalData.state) : 0;
-    const annualGrocery = currentStateGrocery * 52; // Weekly to annual
+    // Use custom groceries if provided, otherwise use state/user average
+    const weeklyGroceries = personalData.weeklyGroceries ?? (personalData.state ? getCurrentGrocery(personalData.state) : 0);
+    const annualGrocery = weeklyGroceries * 52; // Weekly to annual
     
     return annualRent + annualGrocery;
   };
@@ -1020,23 +1083,34 @@ export const LifeSimulator: React.FC = () => {
     const annualExpenses = calculateAnnualExpenses();
     
     // Calculate proper net worth: Assets - Liabilities (same as NetWorthPage)
-    // Net worth = Cash savings + Investment accounts + 401k balance - Debt
-    const totalAssets = personalData.savings + personalData.investments + 0 + 0; // cash + investments + retirement + other
+    // Net worth = Cash savings + Investment accounts (including IRA holdings) + 401k balance - Debt
+    const totalInvestmentValue = personalData.investments + 
+      (personalData.iraTraditionalHoldings || 0) + 
+      (personalData.iraRothHoldings || 0);
+    // Calculate total bank balance from new account system
+    const finalTotalBank = (personalData.savingsAccount ?? 0) + 
+                           (personalData.checkingAccount ?? 0) + 
+                           (personalData.hysaAccount ?? 0);
+    const totalAssets = finalTotalBank + totalInvestmentValue + 0 + 0; // cash + investments + retirement + other
     const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
-    const netWorth = totalAssets - totalLiabilities; // Use personalData.investments for initial setup
+    const netWorth = totalAssets - totalLiabilities; // Include IRA holdings in net worth calculation
     
     // Initialize the investment ref with the current investment value if not started
-    currentInvestmentValueRef.current = personalData.investments;
+    // Initialize investment ref with current investment value plus IRA holdings (use same calculation)
+    currentInvestmentValueRef.current = totalInvestmentValue;
     
-    // Initialize the savings ref with the current savings value if not started
-    currentSavingsRef.current = personalData.savings;
+    // Initialize the savings ref with the current total bank balance
+    const currentBankTotal = (personalData.savingsAccount ?? 0) + 
+                             (personalData.checkingAccount ?? 0) + 
+                             (personalData.hysaAccount ?? 0);
+    currentSavingsRef.current = currentBankTotal;
     
     setFinancials(prev => ({
       ...prev,
       currentSalary: personalData.currentSalary,
       annualExpenses: annualExpenses,
       netWorth: netWorth,
-      investmentAccountValue: personalData.investments // Sync the financials with personalData
+      investmentAccountValue: totalInvestmentValue // Use same calculation as net worth
     }));
   }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount]);
 
@@ -2416,6 +2490,26 @@ export const LifeSimulator: React.FC = () => {
         return renderInvestmentsPage();
       case 'networth':
         return renderNetWorthPage();
+      case 'bank':
+        return (
+          <BankAccountPage
+            personalData={personalData}
+            setPersonalData={setPersonalData}
+            setCurrentMode={setCurrentMode}
+            currentAnnualExpenses={calculateAnnualExpenses()}
+            taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
+              personalData.currentSalary * personalData.contributions401kTraditional / 100,
+              personalData.currentSalary * personalData.contributions401kRoth / 100)}
+            hasStarted={hasStarted}
+            simulationState={simulationState}
+            simulationProgress={simulationProgress}
+            historicalData={historicalData}
+            onStart={startSimulation}
+            onPause={pauseSimulation}
+            onReset={resetSimulation}
+            onEditProfile={handleEditProfile}
+          />
+        );
       case 'economy':
         return renderEconomyPage();
       case 'realistic':

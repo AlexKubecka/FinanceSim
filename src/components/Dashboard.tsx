@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3 } from 'lucide-react';
+import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3, PiggyBank } from 'lucide-react';
 import { 
   PersonalFinancialData, 
   SimulationProgress, 
@@ -12,7 +12,7 @@ import { SimulationControls } from './SimulationControls';
 import { ProgressTimeline } from './ProgressTimeline';
 import { LifeProgressBar } from './LifeProgressBar';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank';
 
 interface TaxInfo {
   totalTax: number;
@@ -185,7 +185,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Main Dashboard Cards */}
-      <div className="grid md:grid-cols-4 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         {/* Net Worth Card */}
         <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
              onClick={() => setCurrentMode('networth')}>
@@ -482,6 +482,77 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="mt-4 h-16 bg-purple-50 rounded flex items-center justify-center">
             <TrendingUp className="h-6 w-6 text-purple-400" />
             <span className="ml-2 text-sm text-purple-600">Portfolio growth</span>
+          </div>
+        </div>
+
+        {/* Bank Account Card */}
+        <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
+             onClick={() => setCurrentMode('bank')}>
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+              <PiggyBank className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Bank Account</h3>
+              <p className="text-sm text-gray-600">Cash & savings</p>
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-blue-600 mb-2">
+            ${(() => {
+              const legacySavings = personalData.savings || 0;
+              const savingsAccount = personalData.savingsAccount ?? 0;
+              const checkingAccount = personalData.checkingAccount ?? 0;
+              const hysaAccount = personalData.hysaAccount ?? 0;
+              const totalBankBalance = savingsAccount + checkingAccount + hysaAccount + legacySavings;
+              return totalBankBalance.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            })()}
+          </div>
+          
+          {/* Savings Rate */}
+          <div className="mb-3">
+            <p className="text-sm text-gray-600">Monthly Surplus</p>
+            <p className={`text-lg font-bold ${((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${(((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            </p>
+          </div>
+          
+          <p className="text-sm text-gray-500 mb-3">Liquid assets & emergency fund</p>
+          
+          {/* Emergency Fund Indicator */}
+          <div className="mt-4 h-16 bg-blue-50 rounded p-2 flex flex-col justify-center">
+            {(() => {
+              const monthlyExpenses = currentAnnualExpenses / 12;
+              const emergencyFundGoal = monthlyExpenses * (personalData.emergencyFundMonths || 6);
+              const legacySavings = personalData.savings || 0;
+              const savingsAccount = personalData.savingsAccount ?? 0;
+              const checkingAccount = personalData.checkingAccount ?? 0;
+              const hysaAccount = personalData.hysaAccount ?? 0;
+              const totalBankBalance = savingsAccount + checkingAccount + hysaAccount + legacySavings;
+              const coverageMonths = monthlyExpenses > 0 ? totalBankBalance / monthlyExpenses : 0;
+              const goalMet = totalBankBalance >= emergencyFundGoal;
+              
+              return (
+                <>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-gray-600">Emergency Fund</span>
+                    <span className={`text-xs font-medium ${goalMet ? 'text-green-600' : 'text-orange-600'}`}>
+                      {coverageMonths.toFixed(1)} months
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-300 ${goalMet ? 'bg-green-500' : 'bg-blue-500'}`}
+                      style={{ width: `${Math.min((totalBankBalance / emergencyFundGoal) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-center mt-1">
+                    <span className="text-xs text-gray-500">
+                      Goal: {personalData.emergencyFundMonths || 6} months (${emergencyFundGoal.toLocaleString('en-US', { maximumFractionDigits: 0 })})
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
