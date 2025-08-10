@@ -219,6 +219,37 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                 </select>
               </div>
 
+              {/* Tech Stock Holdings - Available for all users */}
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tech Stock Investments (Optional)
+                </label>
+                <input
+                  type="number"
+                  value={personalData.techStockHoldings || ''}
+                  onChange={(e) => {
+                    const holdings = parseFloat(e.target.value) || 0;
+                    setPersonalData(prev => ({ 
+                      ...prev, 
+                      techStockHoldings: Math.max(0, holdings)
+                    }));
+                  }}
+                  placeholder="Enter current value of tech stocks"
+                  className="w-full p-3 border border-gray-300 rounded-lg text-lg"
+                  min="0"
+                  step="100"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {personalData.careerField === 'Tech' 
+                    ? 'Include company stock options, RSUs, ESPP shares, or personal tech stock investments'
+                    : 'Include any tech stock investments (AAPL, GOOGL, MSFT, TSLA, etc.)'
+                  }
+                </p>
+                <div className="mt-2 p-2 bg-green-100 rounded text-xs text-green-700">
+                  💡 <strong>Tip:</strong> This will grow with market performance during the simulation and be included in your net worth calculations.
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">401(k) Company Match (%)</label>
                 <input

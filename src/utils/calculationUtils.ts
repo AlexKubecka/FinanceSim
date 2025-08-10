@@ -12,6 +12,7 @@ export interface PersonalData {
   checkingAccount: number;
   hysaAccount: number;
   investments: number;
+  techStockHoldings: number;
   iraTraditionalHoldings: number;
   iraRothHoldings: number;
   debtAmount: number;
@@ -154,7 +155,8 @@ export const calculateTaxes = (
 export const calculateNetWorth = (personalData: PersonalData): number => {
   const totalInvestmentValue = personalData.investments + 
     (personalData.iraTraditionalHoldings || 0) + 
-    (personalData.iraRothHoldings || 0);
+    (personalData.iraRothHoldings || 0) +
+    (personalData.techStockHoldings || 0);
   
   const totalBankBalance = (personalData.savingsAccount ?? 0) + 
                           (personalData.checkingAccount ?? 0) + 

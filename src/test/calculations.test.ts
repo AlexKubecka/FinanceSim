@@ -22,6 +22,7 @@ describe('Financial Calculation Tests', () => {
     checkingAccount: 5000,
     hysaAccount: 15000,
     investments: 25000,
+    techStockHoldings: 10000,
     iraTraditionalHoldings: 20000,
     iraRothHoldings: 15000,
     debtAmount: 5000,
@@ -41,6 +42,7 @@ describe('Financial Calculation Tests', () => {
     checkingAccount: 2000,
     hysaAccount: 8000,
     investments: 10000,
+    techStockHoldings: 0,
     iraTraditionalHoldings: 0,
     iraRothHoldings: 8000,
     debtAmount: 15000,
@@ -125,18 +127,18 @@ describe('Financial Calculation Tests', () => {
     it('should calculate net worth correctly', () => {
       const netWorth = calculateNetWorth(mockPersonalDataCalifornia);
       
-      // Assets: 10k savings + 5k checking + 15k HYSA + 25k investments + 20k traditional IRA + 15k Roth IRA = 90k
+      // Assets: 10k savings + 5k checking + 15k HYSA + 25k investments + 10k tech stock + 20k traditional IRA + 15k Roth IRA = 100k
       // Liabilities: 5k debt
-      // Net Worth: 90k - 5k = 85k
-      expect(netWorth).toBe(85000);
+      // Net Worth: 100k - 5k = 95k
+      expect(netWorth).toBe(95000);
     });
 
     it('should handle negative net worth', () => {
       const highDebtData = { ...mockPersonalDataCalifornia, debtAmount: 100000 };
       const netWorth = calculateNetWorth(highDebtData);
       
-      // Assets: 90k, Liabilities: 100k, Net Worth: -10k
-      expect(netWorth).toBe(-10000);
+      // Assets: 100k, Liabilities: 100k, Net Worth: 0k
+      expect(netWorth).toBe(0);
     });
 
     it('should handle missing account values', () => {
@@ -146,6 +148,7 @@ describe('Financial Calculation Tests', () => {
         checkingAccount: 0,
         hysaAccount: 0,
         investments: 0,
+        techStockHoldings: 0,
         iraTraditionalHoldings: 0,
         iraRothHoldings: 0,
         debtAmount: 0,
@@ -217,6 +220,45 @@ describe('Financial Calculation Tests', () => {
       // After-tax income should be less than gross but greater than 50% of gross for typical earners
       expect(taxes.afterTaxIncome).toBeLessThan(100000);
       expect(taxes.afterTaxIncome).toBeGreaterThan(50000);
+    });
+  });
+
+  describe('Tech Stock Integration', () => {
+    it('should include tech stock in net worth calculation', () => {
+      const techWorkerData = { 
+        ...mockPersonalDataCalifornia, 
+        techStockHoldings: 50000 
+      };
+      const netWorth = calculateNetWorth(techWorkerData);
+      
+      // Assets: 30k bank + 25k investments + 50k tech stock + 35k IRA = 140k
+      // Liabilities: 5k debt
+      // Net Worth: 140k - 5k = 135k
+      expect(netWorth).toBe(135000);
+    });
+
+    it('should handle zero tech stock holdings', () => {
+      const noTechData = { 
+        ...mockPersonalDataCalifornia, 
+        techStockHoldings: 0 
+      };
+      const netWorth = calculateNetWorth(noTechData);
+      
+      // Should be same as regular calculation without tech stock
+      expect(netWorth).toBe(85000); // 95k assets - 10k tech stock difference
+    });
+
+    it('should handle tech stock for non-tech workers', () => {
+      const nonTechData = { 
+        ...mockPersonalDataTexas, 
+        techStockHoldings: 5000 // Anyone can invest in tech stocks
+      };
+      const netWorth = calculateNetWorth(nonTechData);
+      
+      // Assets: 15k bank + 10k investments + 5k tech stock + 8k IRA = 38k
+      // Liabilities: 15k debt
+      // Net Worth: 38k - 15k = 23k
+      expect(netWorth).toBe(23000);
     });
   });
 

@@ -11,6 +11,7 @@ export interface InvestmentBreakdown {
   traditionalIraBalance: number;
   rothIraBalance: number;
   taxableBalance: number;
+  techStockBalance: number;
 }
 
 /**
@@ -100,6 +101,7 @@ export const calculateInvestmentBreakdown = (
     roth401kBalance,
     traditionalIraBalance,
     rothIraBalance,
-    taxableBalance
+    taxableBalance,
+    techStockBalance: personalData.techStockHoldings || 0
   };
 };

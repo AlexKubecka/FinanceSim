@@ -54,6 +54,7 @@ export const LifeSimulator: React.FC = () => {
     checkingAccount: 0, // Checking account (0% APY)
     hysaAccount: 0, // High Yield Savings Account (4% APY)
     investments: 0,
+    techStockHoldings: 0,
     debtAmount: 0,
     debtInterestRate: 0,
     retirementAge: 65,
@@ -121,6 +122,9 @@ export const LifeSimulator: React.FC = () => {
   
   // Use ref to persist savings value between simulation steps
   const currentSavingsRef = useRef(0);
+  
+  // Use ref to persist tech stock value between simulation steps
+  const currentTechStockValueRef = useRef(0);
 
   // Track if simulation has ever been started
   const [hasStarted, setHasStarted] = useState(false);
@@ -381,11 +385,24 @@ export const LifeSimulator: React.FC = () => {
     // Update the ref with the new value for next iteration
     currentInvestmentValueRef.current = newInvestmentValue;
 
+    // Apply market growth to tech stock holdings (tech stocks typically track with market)
+    const previousTechStockValue = currentTechStockValueRef.current;
+    let newTechStockValue = previousTechStockValue * (1 + investmentGrowthRate);
+    
+    // Update the ref with the new tech stock value for next iteration
+    currentTechStockValueRef.current = newTechStockValue;
+    
+    // Update personalData with new tech stock value for consistent display
+    setPersonalData(prev => ({
+      ...prev,
+      techStockHoldings: newTechStockValue
+    }));
+
     // Calculate net worth: Total Assets - Total Liabilities (same as NetWorthPage)
     // Use the values that will be in the final state for consistency with display
-    // Assets = Cash + Investments + Retirement + Other
+    // Assets = Cash + Investments + Tech Stock + Retirement + Other
     // Liabilities = Debt + Credit Cards + Loans + Other
-    const totalAssets = newTotalBankBalance + newInvestmentValue + 0 + 0; // cash + investments + retirement + other
+    const totalAssets = newTotalBankBalance + newInvestmentValue + newTechStockValue + 0; // cash + investments + tech stock + other
     const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other  
     const calculatedNetWorth = totalAssets - totalLiabilities;
 
@@ -566,6 +583,9 @@ export const LifeSimulator: React.FC = () => {
         (personalData.iraRothHoldings || 0);
       currentInvestmentValueRef.current = totalStartingInvestments;
       
+      // Initialize tech stock ref with current tech stock holdings
+      currentTechStockValueRef.current = personalData.techStockHoldings || 0;
+      
       // Initialize savings ref with current total bank balance
       const currentTotalBank = (personalData.savingsAccount ?? 0) + 
                                (personalData.checkingAccount ?? 0) + 
@@ -601,7 +621,14 @@ export const LifeSimulator: React.FC = () => {
       const initialTotalBank = (personalData.savingsAccount ?? 0) + 
                                (personalData.checkingAccount ?? 0) + 
                                (personalData.hysaAccount ?? 0);
-      const totalAssets = initialTotalBank + financials.investmentAccountValue + 0 + 0; // cash + investments + retirement + other
+      
+      // Include ALL investment components like the simulation does
+      const initialTotalInvestments = (personalData.investments || 0) +
+                                     (personalData.iraTraditionalHoldings || 0) +
+                                     (personalData.iraRothHoldings || 0);
+      const initialTechStock = personalData.techStockHoldings || 0;
+      
+      const totalAssets = initialTotalBank + initialTotalInvestments + initialTechStock; // cash + all investments + tech stock
       const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
       const initialNetWorth = totalAssets - totalLiabilities;
       
@@ -609,7 +636,7 @@ export const LifeSimulator: React.FC = () => {
         age: personalData.age,
         netWorth: initialNetWorth,
         salary: personalData.currentSalary,
-        investments: financials.investmentAccountValue,
+        investments: initialTotalInvestments,
         debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
@@ -800,6 +827,9 @@ export const LifeSimulator: React.FC = () => {
     currentStockIndexRef.current = 5000;
     yearsInCurrentCycleRef.current = 0;
     currentEconomicCycleRef.current = 'expansion';
+    currentInvestmentValueRef.current = 0;
+    currentSavingsRef.current = 0;
+    currentTechStockValueRef.current = 0;
     
     // Reset inflation-adjusted cost data
     setInflationAdjustedRentData({});
@@ -811,6 +841,7 @@ export const LifeSimulator: React.FC = () => {
         ...prev,
         savings: 0,
         investments: 0, // Reset investments to 0
+        techStockHoldings: 0, // Reset tech stock to 0
         currentSalary: originalSalaryRef.current
       }));
       
@@ -830,7 +861,8 @@ export const LifeSimulator: React.FC = () => {
       setPersonalData(prev => ({
         ...prev,
         savings: 0,
-        investments: 0 // Reset investments to 0
+        investments: 0, // Reset investments to 0
+        techStockHoldings: 0 // Reset tech stock to 0
       }));
       
       setFinancials(prev => ({
@@ -880,6 +912,7 @@ export const LifeSimulator: React.FC = () => {
         iraRothHoldings: 8000,
         savings: 15000,
         investments: 5000,
+        techStockHoldings: 15000, // Tech worker with stock options
         debtAmount: 25000,
         debtInterestRate: 4.5,
         retirementAge: 65,
@@ -903,6 +936,7 @@ export const LifeSimulator: React.FC = () => {
         iraRothHoldings: 15000,
         savings: 45000,
         investments: 35000,
+        techStockHoldings: 8000, // Government worker with some tech stock investments
         debtAmount: 15000,
         debtInterestRate: 3.2,
         retirementAge: 62,
@@ -926,6 +960,7 @@ export const LifeSimulator: React.FC = () => {
         iraRothHoldings: 3000,
         savings: 8000,
         investments: 2000,
+        techStockHoldings: 1500, // Service worker with small tech stock investment
         debtAmount: 35000,
         debtInterestRate: 6.8,
         retirementAge: 67,
@@ -1204,21 +1239,25 @@ export const LifeSimulator: React.FC = () => {
     const annualExpenses = calculateAnnualExpenses();
     
     // Calculate proper net worth: Assets - Liabilities (same as NetWorthPage)
-    // Net worth = Cash savings + Investment accounts (including IRA holdings) + 401k balance - Debt
+    // Net worth = Cash savings + Investment accounts (including IRA holdings) + Tech stock + 401k balance - Debt
     const totalInvestmentValue = personalData.investments + 
       (personalData.iraTraditionalHoldings || 0) + 
-      (personalData.iraRothHoldings || 0);
+      (personalData.iraRothHoldings || 0) +
+      (personalData.techStockHoldings || 0);
     // Calculate total bank balance from new account system
     const finalTotalBank = (personalData.savingsAccount ?? 0) + 
                            (personalData.checkingAccount ?? 0) + 
                            (personalData.hysaAccount ?? 0);
     const totalAssets = finalTotalBank + totalInvestmentValue + 0 + 0; // cash + investments + retirement + other
     const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
-    const netWorth = totalAssets - totalLiabilities; // Include IRA holdings in net worth calculation
+    const netWorth = totalAssets - totalLiabilities; // Include IRA holdings and tech stock in net worth calculation
     
     // Initialize the investment ref with the current investment value if not started
     // Initialize investment ref with current investment value plus IRA holdings (use same calculation)
     currentInvestmentValueRef.current = totalInvestmentValue;
+    
+    // Initialize tech stock ref with current tech stock holdings
+    currentTechStockValueRef.current = personalData.techStockHoldings || 0;
     
     // Initialize the savings ref with the current total bank balance
     const currentBankTotal = (personalData.savingsAccount ?? 0) + 
@@ -1693,6 +1732,35 @@ export const LifeSimulator: React.FC = () => {
                   <option value="Government">Government</option>
                   <option value="Service">Service</option>
                 </select>
+              </div>
+              
+              {/* Tech Stock Holdings - Available for all users */}
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <label htmlFor="techStockHoldings" className="block text-sm font-medium text-gray-700 mb-2">
+                  Tech Stock Investments
+                </label>
+                <input
+                  type="number"
+                  id="techStockHoldings"
+                  value={personalData.techStockHoldings || ''}
+                  onChange={(e) => {
+                    const holdings = parseFloat(e.target.value) || 0;
+                    setPersonalData(prev => ({ 
+                      ...prev, 
+                      techStockHoldings: Math.max(0, holdings)
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Current value of tech stocks"
+                  min="0"
+                  step="100"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {personalData.careerField === 'Tech' 
+                    ? 'Company stock options, RSUs, ESPP shares, or personal tech stock investments'
+                    : 'Tech stock investments (AAPL, GOOGL, MSFT, TSLA, etc.)'
+                  }. This will grow with market performance.
+                </p>
               </div>
               
               <div>
@@ -2574,9 +2642,14 @@ export const LifeSimulator: React.FC = () => {
   const renderCurrentMode = () => {
     switch (currentMode) {
       case 'personal':
-        // If basic info not complete OR user hasn't clicked continue, show setup screen
-        if (!personalData.age || !personalData.currentSalary || !personalData.state || !personalData.careerField || !setupCompleted) {
+        // If basic info not complete, show setup screen
+        if (!personalData.age || !personalData.currentSalary || !personalData.state || !personalData.careerField) {
           return renderPersonalSetupWizard();
+        }
+        
+        // If setup is not completed but all required data exists, mark setup as completed
+        if (!setupCompleted) {
+          setSetupCompleted(true);
         }
         
         // Otherwise show the main dashboard
@@ -2595,8 +2668,6 @@ export const LifeSimulator: React.FC = () => {
               personalData.currentSalary * personalData.contributions401kTraditional / 100,
               personalData.currentSalary * personalData.contributions401kRoth / 100)}
             setCurrentMode={setCurrentMode}
-            setSetupCompleted={setSetupCompleted}
-            setSetupStep={setSetupStep}
             startSimulation={startSimulation}
             pauseSimulation={pauseSimulation}
             resetSimulation={resetSimulation}
@@ -2636,8 +2707,16 @@ export const LifeSimulator: React.FC = () => {
       case 'reports':
         return (
           <YearEndReportsPage
+            personalData={personalData}
+            hasStarted={hasStarted}
+            simulationState={simulationState}
+            simulationProgress={simulationProgress}
             yearlySummaries={personalData.yearlySummaries}
             setCurrentMode={setCurrentMode}
+            startSimulation={startSimulation}
+            pauseSimulation={pauseSimulation}
+            resetSimulation={resetSimulation}
+            handleEditProfile={handleEditProfile}
           />
         );
       case 'realistic':

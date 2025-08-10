@@ -2,17 +2,42 @@ import React, { useState } from 'react';
 import { FileText, TrendingUp, Calendar, Download, Filter, BarChart3 } from 'lucide-react';
 import { YearlySummary } from '../types/yearlySummary';
 import { calculateYearOverYearChanges } from '../utils/yearlySummaryGenerator';
+import { SimulationControls } from './SimulationControls';
+import { PersonalFinancialData, SimulationProgress } from '../types/simulation';
 
 type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
 interface YearEndReportsPageProps {
+  // Core data
+  personalData: PersonalFinancialData;
+  
+  // Simulation state
+  hasStarted: boolean;
+  simulationState: 'setup' | 'running' | 'paused' | 'completed';
+  simulationProgress: SimulationProgress;
+  
+  // Reports data
   yearlySummaries: YearlySummary[];
+  
+  // Navigation and actions
   setCurrentMode: React.Dispatch<React.SetStateAction<SimulationMode>>;
+  startSimulation: () => void;
+  pauseSimulation: () => void;
+  resetSimulation: () => void;
+  handleEditProfile: () => void;
 }
 
 export const YearEndReportsPage: React.FC<YearEndReportsPageProps> = ({
+  personalData,
+  hasStarted,
+  simulationState,
+  simulationProgress,
   yearlySummaries,
-  setCurrentMode
+  setCurrentMode,
+  startSimulation,
+  pauseSimulation,
+  resetSimulation,
+  handleEditProfile
 }) => {
   const [selectedYear, setSelectedYear] = useState<number | null>(
     yearlySummaries.length > 0 ? yearlySummaries[yearlySummaries.length - 1].year : null
@@ -70,6 +95,18 @@ export const YearEndReportsPage: React.FC<YearEndReportsPageProps> = ({
   if (yearlySummaries.length === 0) {
     return (
       <div className="space-y-8">
+        {/* Persistent Simulation Controls */}
+        <SimulationControls
+          hasStarted={hasStarted}
+          simulationState={simulationState}
+          simulationProgress={simulationProgress}
+          personalData={personalData}
+          onStart={startSimulation}
+          onPause={pauseSimulation}
+          onReset={resetSimulation}
+          onEditProfile={handleEditProfile}
+        />
+
         <div className="flex items-center mb-6">
           <button
             onClick={() => setCurrentMode('personal')}
@@ -100,6 +137,18 @@ export const YearEndReportsPage: React.FC<YearEndReportsPageProps> = ({
 
   return (
     <div className="space-y-8">
+      {/* Persistent Simulation Controls */}
+      <SimulationControls
+        hasStarted={hasStarted}
+        simulationState={simulationState}
+        simulationProgress={simulationProgress}
+        personalData={personalData}
+        onStart={startSimulation}
+        onPause={pauseSimulation}
+        onReset={resetSimulation}
+        onEditProfile={handleEditProfile}
+      />
+
       {/* Header */}
       <div className="flex items-center mb-6">
         <button

@@ -33,6 +33,7 @@ export interface YearlySummary {
       traditionalIra: number;
       rothIra: number;
       taxable: number;
+      techStock: number;
     };
     
     // Interest earned

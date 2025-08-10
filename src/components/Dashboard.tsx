@@ -54,8 +54,6 @@ interface DashboardProps {
   
   // Navigation and actions
   setCurrentMode: React.Dispatch<React.SetStateAction<SimulationMode>>;
-  setSetupCompleted: (completed: boolean) => void;
-  setSetupStep: (step: number) => void;
   startSimulation: () => void;
   pauseSimulation: () => void;
   resetSimulation: () => void;
@@ -74,8 +72,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   recentEvents,
   taxInfo,
   setCurrentMode,
-  setSetupCompleted,
-  setSetupStep,
   startSimulation,
   pauseSimulation,
   resetSimulation,
@@ -100,22 +96,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <LifeProgressBar
           personalData={personalData}
           currentAge={simulationProgress.currentDate.getFullYear() - (new Date().getFullYear() - personalData.age)}
-          netWorth={financials.netWorth}
+          netWorth={historicalData.length > 0 
+            ? historicalData[historicalData.length - 1]?.netWorth || financials.netWorth
+            : financials.netWorth}
         />
       )}
       
       {/* Header */}
       <div className="flex items-center mb-6">
-        <button
-          onClick={() => {
-            setSetupCompleted(false);
-            setSetupStep(1);
-            setCurrentMode('selection');
-          }}
-          className="flex items-center text-blue-600 hover:text-blue-800 mr-4"
-        >
-          ← Back to Selection
-        </button>
         <User className="h-8 w-8 text-blue-600 mr-3" />
         <h1 className="text-3xl font-bold text-gray-800">Personal Financial Dashboard</h1>
       </div>
@@ -199,7 +187,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div className="text-3xl font-bold text-purple-600 mb-2">
-            ${financials.netWorth.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            ${(historicalData.length > 0 
+              ? historicalData[historicalData.length - 1]?.netWorth || financials.netWorth
+              : financials.netWorth
+            ).toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
           
           {/* YoY Growth Indicator */}

@@ -322,7 +322,12 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   const totalLiabilities = Object.values(liabilities).reduce((sum, value) => sum + value, 0);
   
   // Calculate net worth properly: Total Assets - Total Liabilities
-  const netWorth = totalAssets - totalLiabilities;
+  const calculatedNetWorth = totalAssets - totalLiabilities;
+  
+  // Use historical data when available (during simulation), otherwise use calculated value
+  const netWorth = hasStarted && historicalData.length > 0 
+    ? historicalData[historicalData.length - 1]?.netWorth || calculatedNetWorth
+    : calculatedNetWorth;
 
   // Calculate net worth trend
   const getNetWorthTrend = () => {

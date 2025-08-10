@@ -1,5 +1,5 @@
-import React from 'react';
-import { TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, Edit3, Save, X } from 'lucide-react';
 import { PersonalFinancialData, SimulationState, SimulationProgress } from '../types/simulation';
 import { getIraLimit, getMaxRothIraContribution } from '../utils/constants';
 import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
@@ -37,14 +37,46 @@ const InvestmentsPage: React.FC<InvestmentsPageProps> = ({
   onStart,
   onPause,
   onReset,
-  onEditProfile,
-  financials
+  onEditProfile
 }) => {
-  // Get the current total investment value - use financials.investmentAccountValue if available, otherwise fall back to data.investments
-  const currentInvestmentValue = financials?.investmentAccountValue ?? data.investments;
-  
+  // State for editing different investment values
+  const [editingFields, setEditingFields] = useState<{[key: string]: boolean}>({});
+  const [tempValues, setTempValues] = useState<{[key: string]: string}>({});
+
   // Use centralized calculation for investment account breakdown
-  const investmentBreakdown = calculateInvestmentBreakdown(data, currentInvestmentValue);
+  const investmentBreakdown = calculateInvestmentBreakdown(data, data.investments);
+  
+  // Calculate the current total investment value dynamically from all balance fields
+  const currentInvestmentValue = 
+    investmentBreakdown.traditional401kBalance +
+    investmentBreakdown.roth401kBalance +
+    (data.iraTraditionalHoldings || 0) +
+    (data.iraRothHoldings || 0) +
+    (data.investments || 0) +
+    (data.techStockHoldings || 0);
+
+  // Helper functions for editing
+  const handleEditField = (fieldName: string, currentValue: number) => {
+    setEditingFields(prev => ({ ...prev, [fieldName]: true }));
+    setTempValues(prev => ({ ...prev, [fieldName]: currentValue.toString() }));
+  };
+
+  const handleSaveField = (fieldName: string) => {
+    const newValue = Math.max(0, Number(tempValues[fieldName]) || 0);
+    setData(prev => ({ ...prev, [fieldName]: newValue }));
+    setEditingFields(prev => ({ ...prev, [fieldName]: false }));
+    setTempValues(prev => ({ ...prev, [fieldName]: '' }));
+  };
+
+  const handleCancelEdit = (fieldName: string) => {
+    setEditingFields(prev => ({ ...prev, [fieldName]: false }));
+    setTempValues(prev => ({ ...prev, [fieldName]: '' }));
+  };
+
+  const handleTempValueChange = (fieldName: string, value: string) => {
+    setTempValues(prev => ({ ...prev, [fieldName]: value }));
+  };
+
   return (
     <div className="space-y-8">
       {/* Persistent Simulation Controls */}
@@ -139,10 +171,48 @@ const InvestmentsPage: React.FC<InvestmentsPageProps> = ({
                     <p className="text-xs text-gray-400">Annual contribution</p>
                   </div>
                   <div className="pt-2 border-t border-gray-100">
-                    <p className="text-lg font-semibold text-orange-700">
-                      {formatCurrency(investmentBreakdown.traditionalIraBalance)}
-                    </p>
-                    <p className="text-xs text-gray-500">Current balance</p>
+                    <div className="flex items-center justify-between">
+                      {editingFields.iraTraditionalHoldings ? (
+                        <div className="flex items-center space-x-2 flex-1">
+                          <input
+                            type="number"
+                            value={tempValues.iraTraditionalHoldings || ''}
+                            onChange={(e) => handleTempValueChange('iraTraditionalHoldings', e.target.value)}
+                            className="w-32 p-2 border border-gray-300 rounded text-sm"
+                            placeholder="Balance"
+                            min="0"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveField('iraTraditionalHoldings')}
+                            className="bg-green-600 text-white p-1 rounded hover:bg-green-700 transition-colors"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelEdit('iraTraditionalHoldings')}
+                            className="bg-gray-500 text-white p-1 rounded hover:bg-gray-600 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-lg font-semibold text-orange-700">
+                              {formatCurrency(data.iraTraditionalHoldings || 0)}
+                            </p>
+                            <p className="text-xs text-gray-500">Current balance</p>
+                          </div>
+                          <button
+                            onClick={() => handleEditField('iraTraditionalHoldings', data.iraTraditionalHoldings || 0)}
+                            className="bg-gray-100 text-gray-600 p-1 rounded hover:bg-gray-200 transition-colors"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -158,10 +228,48 @@ const InvestmentsPage: React.FC<InvestmentsPageProps> = ({
                     <p className="text-xs text-gray-400">Annual contribution</p>
                   </div>
                   <div className="pt-2 border-t border-gray-100">
-                    <p className="text-lg font-semibold text-purple-700">
-                      {formatCurrency(investmentBreakdown.rothIraBalance)}
-                    </p>
-                    <p className="text-xs text-gray-500">Current balance</p>
+                    <div className="flex items-center justify-between">
+                      {editingFields.iraRothHoldings ? (
+                        <div className="flex items-center space-x-2 flex-1">
+                          <input
+                            type="number"
+                            value={tempValues.iraRothHoldings || ''}
+                            onChange={(e) => handleTempValueChange('iraRothHoldings', e.target.value)}
+                            className="w-32 p-2 border border-gray-300 rounded text-sm"
+                            placeholder="Balance"
+                            min="0"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveField('iraRothHoldings')}
+                            className="bg-green-600 text-white p-1 rounded hover:bg-green-700 transition-colors"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelEdit('iraRothHoldings')}
+                            className="bg-gray-500 text-white p-1 rounded hover:bg-gray-600 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-lg font-semibold text-purple-700">
+                              {formatCurrency(data.iraRothHoldings || 0)}
+                            </p>
+                            <p className="text-xs text-gray-500">Current balance</p>
+                          </div>
+                          <button
+                            onClick={() => handleEditField('iraRothHoldings', data.iraRothHoldings || 0)}
+                            className="bg-gray-100 text-gray-600 p-1 rounded hover:bg-gray-200 transition-colors"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -186,18 +294,92 @@ const InvestmentsPage: React.FC<InvestmentsPageProps> = ({
               <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                 <h3 className="text-sm font-medium text-gray-600 mb-2">Monthly Investment</h3>
                 <div className="space-y-2">
-                  <div>
-                    <p className="text-2xl font-bold text-indigo-600">
-                      {formatCurrency(data.monthlyInvestment)}
-                    </p>
-                    <p className="text-sm text-gray-500">{formatCurrency(data.monthlyInvestment * 12)} annually</p>
-                    <p className="text-xs text-gray-400">Non-retirement investing</p>
+                  <div className="flex items-center justify-between">
+                    {editingFields.monthlyInvestment ? (
+                      <div className="flex items-center space-x-2 flex-1">
+                        <input
+                          type="number"
+                          value={tempValues.monthlyInvestment || ''}
+                          onChange={(e) => handleTempValueChange('monthlyInvestment', e.target.value)}
+                          className="w-32 p-2 border border-gray-300 rounded text-sm"
+                          placeholder="Amount"
+                          min="0"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveField('monthlyInvestment')}
+                          className="bg-green-600 text-white p-1 rounded hover:bg-green-700 transition-colors"
+                        >
+                          <Save className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleCancelEdit('monthlyInvestment')}
+                          className="bg-gray-500 text-white p-1 rounded hover:bg-gray-600 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-2xl font-bold text-indigo-600">
+                            {formatCurrency(data.monthlyInvestment)}
+                          </p>
+                          <p className="text-sm text-gray-500">{formatCurrency(data.monthlyInvestment * 12)} annually</p>
+                          <p className="text-xs text-gray-400">Non-retirement investing</p>
+                        </div>
+                        <button
+                          onClick={() => handleEditField('monthlyInvestment', data.monthlyInvestment || 0)}
+                          className="bg-gray-100 text-gray-600 p-1 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                   <div className="pt-2 border-t border-gray-100">
-                    <p className="text-lg font-semibold text-indigo-700">
-                      {formatCurrency(investmentBreakdown.taxableBalance)}
-                    </p>
-                    <p className="text-xs text-gray-500">Taxable account balance</p>
+                    <div className="flex items-center justify-between">
+                      {editingFields.investments ? (
+                        <div className="flex items-center space-x-2 flex-1">
+                          <input
+                            type="number"
+                            value={tempValues.investments || ''}
+                            onChange={(e) => handleTempValueChange('investments', e.target.value)}
+                            className="w-32 p-2 border border-gray-300 rounded text-sm"
+                            placeholder="Balance"
+                            min="0"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveField('investments')}
+                            className="bg-green-600 text-white p-1 rounded hover:bg-green-700 transition-colors"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelEdit('investments')}
+                            className="bg-gray-500 text-white p-1 rounded hover:bg-gray-600 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-lg font-semibold text-indigo-700">
+                              {formatCurrency(data.investments || 0)}
+                            </p>
+                            <p className="text-xs text-gray-500">Taxable account balance</p>
+                          </div>
+                          <button
+                            onClick={() => handleEditField('investments', data.investments || 0)}
+                            className="bg-gray-100 text-gray-600 p-1 rounded hover:bg-gray-200 transition-colors"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -233,6 +415,106 @@ const InvestmentsPage: React.FC<InvestmentsPageProps> = ({
                     <p className="text-xs text-gray-500">Annual additions</p>
                   </div>
                 </div>
+              </div>
+            </div>
+            
+            {/* Tech Stock Holdings Section */}
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 shadow-sm border border-green-200">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <div className="w-1 h-6 bg-green-600 rounded mr-3"></div>
+                Tech Stock Holdings
+                <span className="ml-2 bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                  Stock Options
+                </span>
+              </h3>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h4 className="text-sm font-medium text-gray-600 mb-2">Current Holdings</h4>
+                  <div className="flex items-center justify-between">
+                    {editingFields.techStockHoldings ? (
+                      <div className="flex items-center space-x-2 flex-1">
+                        <input
+                          type="number"
+                          value={tempValues.techStockHoldings || ''}
+                          onChange={(e) => handleTempValueChange('techStockHoldings', e.target.value)}
+                          className="w-32 p-2 border border-gray-300 rounded text-sm"
+                          placeholder="Balance"
+                          min="0"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveField('techStockHoldings')}
+                          className="bg-green-600 text-white p-1 rounded hover:bg-green-700 transition-colors"
+                        >
+                          <Save className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleCancelEdit('techStockHoldings')}
+                          className="bg-gray-500 text-white p-1 rounded hover:bg-gray-600 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-2xl font-bold text-green-600">
+                            {formatCurrency(data.techStockHoldings || 0)}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {data.currentSalary > 0 ? 
+                              (((data.techStockHoldings || 0) / data.currentSalary) * 100).toFixed(1) + '% of salary'
+                              : '0% of salary'
+                            }
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {data.careerField === 'Tech' 
+                              ? 'Company stock & options'
+                              : 'Tech stock investments'
+                            }
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleEditField('techStockHoldings', data.techStockHoldings || 0)}
+                          className="bg-gray-100 text-gray-600 p-1 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h4 className="text-sm font-medium text-gray-600 mb-2">Manage Holdings</h4>
+                  <div className="space-y-2">
+                    <input
+                      type="number"
+                      value={data.techStockHoldings || 0}
+                      onChange={(e) => setData(prev => ({ 
+                        ...prev, 
+                        techStockHoldings: Math.max(0, Number(e.target.value) || 0)
+                      }))}
+                      className="w-full p-2 border border-gray-300 rounded text-sm"
+                      placeholder="Tech stock value"
+                      min="0"
+                    />
+                    <p className="text-xs text-gray-500">
+                      {data.careerField === 'Tech' 
+                        ? 'Update when you receive stock options, vest shares, or sell holdings'
+                        : 'Update when you buy or sell tech stock investments (AAPL, GOOGL, MSFT, etc.)'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-green-100 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>💡 Tech Stock Tips:</strong> Consider diversification - don't keep more than 10-15% of your portfolio in company stock. 
+                  Tech stocks can be volatile, so balance with index funds and bonds.
+                </p>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PersonalFinancialData } from '../types/simulation';
+import { calculateNetWorth } from '../utils/calculationUtils';
 
 interface FinancialState {
   currentSalary: number;
@@ -35,14 +36,13 @@ export const useFinancials = ({ personalData, calculateAnnualExpenses }: UseFina
     }));
   };
 
-  // Update financials effect - only recalculate when salary or savings change
+  // Update financials effect - recalculate when any financial data changes
   useEffect(() => {
     const annualExpenses = calculateAnnualExpenses();
     
     setFinancials(prev => {
-      // Calculate proper net worth: Assets - Liabilities
-      // Net worth = Cash savings + Investment accounts + 401k balance - Debt
-      const netWorth = personalData.savings + prev.investmentAccountValue; // No debt currently tracked
+      // Use the same net worth calculation as everywhere else in the app
+      const netWorth = calculateNetWorth(personalData);
       
       return {
         ...prev,
@@ -51,7 +51,18 @@ export const useFinancials = ({ personalData, calculateAnnualExpenses }: UseFina
         netWorth: netWorth
       };
     });
-  }, [personalData.currentSalary, personalData.savings]);
+  }, [
+    personalData.currentSalary, 
+    personalData.savingsAccount,
+    personalData.checkingAccount,
+    personalData.hysaAccount,
+    personalData.investments,
+    personalData.iraTraditionalHoldings,
+    personalData.iraRothHoldings,
+    personalData.techStockHoldings,
+    personalData.debtAmount,
+    calculateAnnualExpenses
+  ]);
 
   return {
     // State

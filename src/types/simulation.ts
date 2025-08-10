@@ -44,6 +44,7 @@ export interface PersonalFinancialData {
   checkingAccount: number; // Checking account (0% APY)
   hysaAccount: number; // High Yield Savings Account (4% APY)
   investments: number;
+  techStockHoldings: number; // Tech stock holdings (for stock options/tech investments)
   debtAmount: number;
   debtInterestRate: number;
   retirementAge: number;

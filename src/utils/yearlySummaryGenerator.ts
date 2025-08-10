@@ -86,7 +86,8 @@ export const generateYearlySummary = (
         roth401k: investmentBreakdown.roth401kBalance,
         traditionalIra: investmentBreakdown.traditionalIraBalance,
         rothIra: investmentBreakdown.rothIraBalance,
-        taxable: investmentBreakdown.taxableBalance
+        taxable: investmentBreakdown.taxableBalance,
+        techStock: investmentBreakdown.techStockBalance
       },
       
       interestEarned
