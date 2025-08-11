@@ -297,19 +297,19 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   const hysaBalance = personalData.hysaAccount ?? 0;
   const legacySavings = personalData.savings ?? 0;
 
-  // Calculate net worth components - avoid double counting by only including individual accounts
+  // Calculate net worth components - use simulation values when available, otherwise calculate
+  // When simulation is running, prefer the authoritative financials values
+  const totalCash = savingsBalance + checkingBalance + hysaBalance + legacySavings;
+  
   const assets = {
     savings: savingsBalance,
     checking: checkingBalance,
     hysa: hysaBalance,
     legacy: legacySavings, // For backwards compatibility
-    investments: financials.investmentAccountValue || 0, // Use current investment value, not initial
+    investments: financials.investmentAccountValue || 0, // This now includes tech stocks from simulation
     retirement: 0, // Could be calculated from 401k contributions over time
     other: 0
   };
-
-  // Calculate total cash for display purposes
-  const totalCash = savingsBalance + checkingBalance + hysaBalance + legacySavings;
 
   const liabilities = {
     debt: personalData.debtAmount || 0,
@@ -324,10 +324,10 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   // Calculate net worth properly: Total Assets - Total Liabilities
   const calculatedNetWorth = totalAssets - totalLiabilities;
   
-  // Use historical data when available (during simulation), otherwise use calculated value
+  // Use simulation values when available (they're authoritative), otherwise use calculated value
   const netWorth = hasStarted && historicalData.length > 0 
-    ? historicalData[historicalData.length - 1]?.netWorth || calculatedNetWorth
-    : calculatedNetWorth;
+    ? historicalData[historicalData.length - 1]?.netWorth || financials.netWorth || calculatedNetWorth
+    : financials.netWorth || calculatedNetWorth;
 
   // Calculate net worth trend
   const getNetWorthTrend = () => {

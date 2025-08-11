@@ -54,6 +54,8 @@ interface DashboardProps {
   
   // Navigation and actions
   setCurrentMode: React.Dispatch<React.SetStateAction<SimulationMode>>;
+  showYearlyReports: boolean;
+  onToggleYearlyReports: (enabled: boolean) => void;
   startSimulation: () => void;
   pauseSimulation: () => void;
   resetSimulation: () => void;
@@ -72,6 +74,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   recentEvents,
   taxInfo,
   setCurrentMode,
+  showYearlyReports,
+  onToggleYearlyReports,
   startSimulation,
   pauseSimulation,
   resetSimulation,
@@ -103,9 +107,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
       
       {/* Header */}
-      <div className="flex items-center mb-6">
-        <User className="h-8 w-8 text-blue-600 mr-3" />
-        <h1 className="text-3xl font-bold text-gray-800">Personal Financial Dashboard</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center">
+          <User className="h-8 w-8 text-blue-600 mr-3" />
+          <h1 className="text-3xl font-bold text-gray-800">Personal Financial Dashboard</h1>
+        </div>
+        
+        {/* Settings */}
+        <div className="flex items-center space-x-4">
+          <label className="flex items-center space-x-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showYearlyReports}
+              onChange={(e) => onToggleYearlyReports(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>Show yearly reports</span>
+          </label>
+        </div>
       </div>
 
       {/* Simulation Progress (appears when simulation is running) */}

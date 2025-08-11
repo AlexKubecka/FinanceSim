@@ -115,6 +115,61 @@ export const useSimulation = ({
       };
     });
 
+    // Check for retirement account milestone alerts
+    const previousAge = simulationProgress.currentAge;
+    
+    // IRA penalty-free withdrawal at age 59.5 (but we check at 60 for simplicity)
+    if (previousAge < 60 && newAge >= 60) {
+      setRecentEvents(prev => {
+        const newEvent = {
+          type: 'retirement_milestone',
+          description: '🎉 You turned 60! You can now make penalty-free withdrawals from your IRA accounts (available since age 59½).',
+          timestamp: new Date(),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+        return [newEvent, ...prev].slice(0, 5);
+      });
+    }
+    
+    // Early Social Security at age 62
+    if (previousAge < 62 && newAge >= 62) {
+      setRecentEvents(prev => {
+        const newEvent = {
+          type: 'retirement_milestone',
+          description: '💰 You turned 62! You can now claim early Social Security benefits (at reduced rates).',
+          timestamp: new Date(),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+        return [newEvent, ...prev].slice(0, 5);
+      });
+    }
+    
+    // Medicare and traditional retirement at age 65
+    if (previousAge < 65 && newAge >= 65) {
+      setRecentEvents(prev => {
+        const newEvent = {
+          type: 'retirement_milestone',
+          description: '🎉 You turned 65! You can now access Medicare and make full retirement withdrawals from your 401k.',
+          timestamp: new Date(),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+        return [newEvent, ...prev].slice(0, 5);
+      });
+    }
+    
+    // Full Social Security retirement age (67 for most people)
+    if (previousAge < 67 && newAge >= 67) {
+      setRecentEvents(prev => {
+        const newEvent = {
+          type: 'retirement_milestone',
+          description: '🏆 You turned 67! You can now claim full Social Security benefits without reduction.',
+          timestamp: new Date(),
+          id: Math.random().toString(36).substr(2, 9)
+        };
+        return [newEvent, ...prev].slice(0, 5);
+      });
+    }
+
     // Update financials with inflation effects
     let newInvestmentValue = 0;
     

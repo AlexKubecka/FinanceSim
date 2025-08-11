@@ -85,6 +85,7 @@ export const LifeSimulator: React.FC = () => {
   // Yearly summary modal state
   const [showYearEndModal, setShowYearEndModal] = useState(false);
   const [currentYearlySummary, setCurrentYearlySummary] = useState<YearlySummary | null>(null);
+  const [showYearlyReports, setShowYearlyReports] = useState(true); // New setting to control yearly reports
 
   // Economic state
   const [economicState, setEconomicState] = useState<EconomicState>(createInitialEconomicState());
@@ -406,11 +407,14 @@ export const LifeSimulator: React.FC = () => {
     const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other  
     const calculatedNetWorth = totalAssets - totalLiabilities;
 
+    // Calculate total investment value including tech stocks for consistent display
+    const totalInvestmentValueIncludingTechStock = newInvestmentValue + newTechStockValue;
+
     // Single setFinancials call to update both investment value and net worth
     setFinancials(prev => ({
       ...prev,
-      investmentAccountValue: newInvestmentValue,
-      investments: newInvestmentValue, // Keep both for compatibility
+      investmentAccountValue: totalInvestmentValueIncludingTechStock,
+      investments: totalInvestmentValueIncludingTechStock, // Keep both for compatibility
       netWorth: calculatedNetWorth,
       currentSalary: personalData.currentSalary,
       annualExpenses: updatedAnnualExpenses // Update expenses for inflation
@@ -422,7 +426,7 @@ export const LifeSimulator: React.FC = () => {
         age: newAge,
         netWorth: calculatedNetWorth,
         salary: personalData.currentSalary,
-        investments: newInvestmentValue,
+        investments: totalInvestmentValueIncludingTechStock,
         debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: newEconomicState.currentInflationRate,
@@ -531,9 +535,9 @@ export const LifeSimulator: React.FC = () => {
       personalData.yearlySummaries.length > 0 ? personalData.yearlySummaries[personalData.yearlySummaries.length - 1] : undefined
     );
 
-    // Pause simulation before showing modal - do it directly to ensure it happens immediately
+    // Only pause simulation if we're going to show the modal
     const wasRunning = simulationStateRef.current === 'running';
-    if (wasRunning) {
+    if (showYearlyReports && wasRunning) {
       console.log('📊 Year End: Pausing simulation for yearly summary modal');
       // Stop the interval immediately
       if (intervalRef.current) {
@@ -543,20 +547,24 @@ export const LifeSimulator: React.FC = () => {
       // Set state to paused
       setSimulationState('paused');
       simulationStateRef.current = 'paused'; // Update ref immediately
-    } else {
+    } else if (showYearlyReports) {
       console.log('📊 Year End: Simulation was not running, showing modal without pause');
+    } else {
+      console.log('📊 Year End: Yearly reports disabled, continuing simulation without pause');
     }
 
-    // Show the yearly summary modal
+    // Show the yearly summary modal only if the setting is enabled
     setCurrentYearlySummary(yearlySummary);
-    setShowYearEndModal(true);
+    if (showYearlyReports) {
+      setShowYearEndModal(true);
+    }
 
     // Save the yearly summary to personal data
     setPersonalData(prev => ({
       ...prev,
       yearlySummaries: [...prev.yearlySummaries, yearlySummary],
-      // Store if simulation was running before modal to resume later
-      wasRunningBeforeModal: wasRunning
+      // Only store wasRunningBeforeModal if we're showing the modal
+      wasRunningBeforeModal: showYearlyReports ? wasRunning : false
     }));
 
     // Check if simulation should end
@@ -627,6 +635,7 @@ export const LifeSimulator: React.FC = () => {
                                      (personalData.iraTraditionalHoldings || 0) +
                                      (personalData.iraRothHoldings || 0);
       const initialTechStock = personalData.techStockHoldings || 0;
+      const initialTotalInvestmentsIncludingTechStock = initialTotalInvestments + initialTechStock;
       
       const totalAssets = initialTotalBank + initialTotalInvestments + initialTechStock; // cash + all investments + tech stock
       const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
@@ -636,7 +645,7 @@ export const LifeSimulator: React.FC = () => {
         age: personalData.age,
         netWorth: initialNetWorth,
         salary: personalData.currentSalary,
-        investments: initialTotalInvestments,
+        investments: initialTotalInvestmentsIncludingTechStock,
         debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
@@ -813,6 +822,10 @@ export const LifeSimulator: React.FC = () => {
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
+    // Clear yearly summary modal state
+    setShowYearEndModal(false);
+    setCurrentYearlySummary(null);
+    
     // Reset economic state
     setEconomicState({
       currentInflationRate: 0.025,
@@ -842,6 +855,7 @@ export const LifeSimulator: React.FC = () => {
         savings: 0,
         investments: 0, // Reset investments to 0
         techStockHoldings: 0, // Reset tech stock to 0
+        yearlySummaries: [], // Clear yearly reports
         currentSalary: originalSalaryRef.current
       }));
       
@@ -862,7 +876,8 @@ export const LifeSimulator: React.FC = () => {
         ...prev,
         savings: 0,
         investments: 0, // Reset investments to 0
-        techStockHoldings: 0 // Reset tech stock to 0
+        techStockHoldings: 0, // Reset tech stock to 0
+        yearlySummaries: [] // Clear yearly reports
       }));
       
       setFinancials(prev => ({
@@ -1258,6 +1273,7 @@ export const LifeSimulator: React.FC = () => {
     
     // Initialize tech stock ref with current tech stock holdings
     currentTechStockValueRef.current = personalData.techStockHoldings || 0;
+    currentTechStockValueRef.current = personalData.techStockHoldings || 0;
     
     // Initialize the savings ref with the current total bank balance
     const currentBankTotal = (personalData.savingsAccount ?? 0) + 
@@ -1272,7 +1288,7 @@ export const LifeSimulator: React.FC = () => {
       netWorth: netWorth,
       investmentAccountValue: totalInvestmentValue // Use same calculation as net worth
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount]);
+  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount, personalData.techStockHoldings, personalData.iraTraditionalHoldings, personalData.iraRothHoldings]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -2668,6 +2684,8 @@ export const LifeSimulator: React.FC = () => {
               personalData.currentSalary * personalData.contributions401kTraditional / 100,
               personalData.currentSalary * personalData.contributions401kRoth / 100)}
             setCurrentMode={setCurrentMode}
+            showYearlyReports={showYearlyReports}
+            onToggleYearlyReports={setShowYearlyReports}
             startSimulation={startSimulation}
             pauseSimulation={pauseSimulation}
             resetSimulation={resetSimulation}
