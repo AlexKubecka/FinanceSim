@@ -817,8 +817,9 @@ export const LifeSimulator: React.FC = () => {
     });
     setHistoricalData([]);
     setHasStarted(false);
-    setSetupCompleted(false);
-    setSetupStep(1);
+    // Don't reset setup completion - user should stay on Dashboard after reset
+    // setSetupCompleted(false);
+    // setSetupStep(1);
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
@@ -900,9 +901,16 @@ export const LifeSimulator: React.FC = () => {
 
   // Handle edit profile action
   const handleEditProfile = () => {
+    // Reset personal data to force re-entry
     setPersonalData(prev => ({ ...prev, age: 0, currentSalary: 0, state: '' }));
     setFinancials(prev => ({ ...prev, currentSalary: 0 }));
-    setCurrentMode('selection');
+    
+    // Reset setup completion state to require going through setup wizard again
+    setSetupCompleted(false);
+    setSetupStep(1);
+    
+    // Navigate to personal mode which will show the setup wizard
+    setCurrentMode('personal');
   };
 
   // Developer autofill for testing (only in development)
@@ -2663,35 +2671,35 @@ export const LifeSimulator: React.FC = () => {
           return renderPersonalSetupWizard();
         }
         
-        // If setup is not completed but all required data exists, mark setup as completed
-        if (!setupCompleted) {
-          setSetupCompleted(true);
+        // If setup is completed, show the main dashboard
+        if (setupCompleted) {
+          return (
+            <Dashboard
+              personalData={personalData}
+              financials={financials}
+              currentAnnualExpenses={calculateAnnualExpenses()}
+              hasStarted={hasStarted}
+              simulationState={simulationState}
+              simulationProgress={simulationProgress}
+              historicalData={historicalData}
+              economicState={economicState}
+              recentEvents={recentEvents}
+              taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
+                personalData.currentSalary * personalData.contributions401kTraditional / 100,
+                personalData.currentSalary * personalData.contributions401kRoth / 100)}
+              setCurrentMode={setCurrentMode}
+              showYearlyReports={showYearlyReports}
+              onToggleYearlyReports={setShowYearlyReports}
+              startSimulation={startSimulation}
+              pauseSimulation={pauseSimulation}
+              resetSimulation={resetSimulation}
+              handleEditProfile={handleEditProfile}
+            />
+          );
         }
         
-        // Otherwise show the main dashboard
-        return (
-          <Dashboard
-            personalData={personalData}
-            financials={financials}
-            currentAnnualExpenses={calculateAnnualExpenses()}
-            hasStarted={hasStarted}
-            simulationState={simulationState}
-            simulationProgress={simulationProgress}
-            historicalData={historicalData}
-            economicState={economicState}
-            recentEvents={recentEvents}
-            taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
-              personalData.currentSalary * personalData.contributions401kTraditional / 100,
-              personalData.currentSalary * personalData.contributions401kRoth / 100)}
-            setCurrentMode={setCurrentMode}
-            showYearlyReports={showYearlyReports}
-            onToggleYearlyReports={setShowYearlyReports}
-            startSimulation={startSimulation}
-            pauseSimulation={pauseSimulation}
-            resetSimulation={resetSimulation}
-            handleEditProfile={handleEditProfile}
-          />
-        );
+        // If setup not completed but all required data exists, continue showing setup wizard
+        return renderPersonalSetupWizard();
       case 'salary':
         return renderSalaryPage();
       case 'expenses':

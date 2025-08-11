@@ -589,7 +589,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   onClick={() => setSetupCompleted(true)}
                   className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
                 >
-                  Start Simulation
+                  Next: Review & Start
                 </button>
               </div>
             </div>
