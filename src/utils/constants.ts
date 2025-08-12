@@ -5,9 +5,15 @@ export const INITIAL_ECONOMIC_STATE = {
   currentInflationRate: 0.025, // 2.5% inflation
   cumulativeInflation: 1.0,
   stockMarketIndex: 5000, // S&P 500-like level
-  stockMarketGrowth: 0.10, // 10% average annual growth
+  stockMarketGrowth: 0.07, // 7% S&P 500 growth (default)
   economicCycle: 'expansion' as const,
-  yearsInCurrentCycle: 0
+  yearsInCurrentCycle: 0,
+  investmentReturns: {
+    sp500: 0.07,      // S&P 500: 7% annually
+    tech: 0.10,       // Tech: Start at 10% (will be random each year)
+    treasuries: 0.04, // Treasuries: 4% annually
+    bonds: 0.04       // Bonds: 4% annually
+  }
 };
 
 // 401k and IRA limits and configuration

@@ -16,6 +16,8 @@ export type Contribution401kType = 'traditional' | 'roth';
 
 export type MaritalStatus = 'single' | 'married-jointly' | 'married-separately';
 
+export type InvestmentType = 'sp500' | 'tech' | 'treasuries' | 'bonds';
+
 // Personal financial data interface
 export interface PersonalFinancialData {
   age: number;
@@ -33,9 +35,21 @@ export interface PersonalFinancialData {
   // Enhanced expense tracking
   monthlyRent?: number; // Optional, falls back to state average
   weeklyGroceries?: number; // Optional, falls back to state average
-  // Enhanced IRA tracking
-  iraTraditionalHoldings: number; // Current traditional IRA balance
-  iraRothHoldings: number; // Current Roth IRA balance
+  // Enhanced retirement account tracking
+  iraTraditionalHoldings: number; // Current traditional IRA balance (SP500)
+  iraTraditionalTechHoldings: number; // Current traditional IRA tech holdings
+  iraRothHoldings: number; // Current Roth IRA balance (SP500)
+  iraRothTechHoldings: number; // Current Roth IRA tech holdings
+  the401kTraditionalHoldings: number; // Current traditional 401k balance (SP500)
+  the401kTraditionalTechHoldings: number; // Current traditional 401k tech holdings
+  the401kRothHoldings: number; // Current Roth 401k balance (SP500)
+  the401kRothTechHoldings: number; // Current Roth 401k tech holdings
+  // Investment account cash balances
+  personalInvestmentCash: number; // Cash balance in personal investment account
+  iraTraditionalCash: number; // Cash balance in traditional IRA
+  iraRothCash: number; // Cash balance in Roth IRA
+  the401kTraditionalCash: number; // Cash balance in traditional 401k
+  the401kRothCash: number; // Cash balance in Roth 401k
   cashBonus: number;
   stockBonus: number;
   savings: number; // DEPRECATED - keeping for backwards compatibility
@@ -81,6 +95,14 @@ export interface SimulationProgress {
 export interface EconomicState {
   currentInflationRate: number;
   cumulativeInflation: number;
+  // Investment returns by type (annual percentage)
+  investmentReturns: {
+    sp500: number;      // S&P 500 - 7%
+    tech: number;       // Tech stocks - 0-20% random
+    treasuries: number; // Treasuries - 4%
+    bonds: number;      // Bonds - 4%
+  };
+  // Legacy fields for backward compatibility
   stockMarketIndex: number;
   stockMarketGrowth: number;
   economicCycle: EconomicCycle;
@@ -172,7 +194,7 @@ export interface UseSimulationReturn {
 
 export interface UseEconomicStateReturn {
   economicState: EconomicState;
-  simulateEconomicStep: (currentEconomic: EconomicState, previousYearIndex: number) => EconomicState;
+  simulateEconomicStep: (currentEconomic: EconomicState) => EconomicState;
   resetEconomicState: () => void;
 }
 

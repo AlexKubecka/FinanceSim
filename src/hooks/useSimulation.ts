@@ -24,7 +24,7 @@ interface UseSimulationProps {
   ) => any;
   updatePersonalData: (data: Partial<PersonalFinancialData>) => void;
   updateFinancials: (data: any) => void;
-  simulateEconomicStep: (currentEconomic: EconomicState, previousYearIndex: number) => EconomicState;
+  simulateEconomicStep: (currentEconomic: EconomicState) => EconomicState;
 }
 
 export const useSimulation = ({
@@ -77,9 +77,6 @@ export const useSimulation = ({
   const runSimulationStep = () => {
     let newAge = simulationProgress.currentAge;
     
-    // Use the current ref value as the previous year for YoY calculation
-    const previousYearValue = currentStockIndexRef.current;
-    
     // Create updated economic state with current values
     const currentEconomicState = {
       ...economicState,
@@ -89,7 +86,7 @@ export const useSimulation = ({
     };
     
     // Simulate economic changes
-    const newEconomicState = simulateEconomicStep(currentEconomicState, previousYearValue);
+    const newEconomicState = simulateEconomicStep(currentEconomicState);
     setEconomicState(newEconomicState);
     
     // Update all refs (for immediate access)
@@ -195,7 +192,8 @@ export const useSimulation = ({
     const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
 
     // Apply investment growth to existing portfolio
-    const investmentGrowthRate = newEconomicState.stockMarketGrowth;
+    // Use S&P 500 growth rate for general investments
+    const investmentGrowthRate = newEconomicState.investmentReturns.sp500;
     const previousInvestmentValue = financials.investmentAccountValue;
     
     // Calculate new investment value: previous value grows + new contributions

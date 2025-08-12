@@ -5,7 +5,7 @@ import { Dashboard } from '../components/Dashboard';
 import { SetupWizard } from '../components/SetupWizard';
 import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { NetWorthPage } from '../components/NetWorthPage';
-import InvestmentsPage from '../components/InvestmentsPage';
+import AccountBasedInvestmentPage from '../components/AccountBasedInvestmentPage';
 import { BankAccountPage } from '../components/BankAccountPage';
 import { YearEndSummaryModal } from '../components/YearEndSummaryModal';
 import { YearEndReportsPage } from '../components/YearEndReportsPage';
@@ -45,7 +45,18 @@ export const LifeSimulator: React.FC = () => {
     monthlyRent: undefined, // Optional - uses state average if not set
     weeklyGroceries: undefined, // Optional - uses state average if not set
     iraTraditionalHoldings: 0,
+    iraTraditionalTechHoldings: 0,
     iraRothHoldings: 0,
+    iraRothTechHoldings: 0,
+    the401kTraditionalHoldings: 0,
+    the401kTraditionalTechHoldings: 0,
+    the401kRothHoldings: 0,
+    the401kRothTechHoldings: 0,
+    personalInvestmentCash: 0,
+    iraTraditionalCash: 0,
+    iraRothCash: 0,
+    the401kTraditionalCash: 0,
+    the401kRothCash: 0,
     cashBonus: 0,
     stockBonus: 0,
     savings: 0, // DEPRECATED - keeping for backwards compatibility
@@ -178,8 +189,6 @@ export const LifeSimulator: React.FC = () => {
     let newAge = simulationProgress.currentAge;
     
     // Use the current ref value as the previous year for YoY calculation
-    const previousYearValue = currentStockIndexRef.current;
-    
     // Create updated economic state with current stock market index AND years in cycle AND economic cycle
     const currentEconomicState = {
       ...economicState,
@@ -189,7 +198,7 @@ export const LifeSimulator: React.FC = () => {
     };
     
     // Use the tracked previous year stock index for YoY calculation
-    const newEconomicState = simulateEconomicStep(currentEconomicState, previousYearValue);
+    const newEconomicState = simulateEconomicStep(currentEconomicState);
     setEconomicState(newEconomicState);
     
     // Update all refs (for immediate access)
@@ -375,20 +384,21 @@ export const LifeSimulator: React.FC = () => {
     const total401kContribution = investmentBreakdown.annual401kTraditional + investmentBreakdown.annual401kRoth + investmentBreakdown.employerMatch;
 
     // Apply investment growth to existing portfolio
-    // Use stock market growth rate from economic simulation
-    const investmentGrowthRate = newEconomicState.stockMarketGrowth;
+    // Use S&P 500 growth rate for general investments (401k, IRA, taxable accounts)
+    const generalInvestmentGrowthRate = newEconomicState.investmentReturns.sp500;
     const previousInvestmentValue = currentInvestmentValueRef.current; // Get current value before calculation
     
     // Calculate new investment value: previous value grows + new contributions
-    let newInvestmentValue = (previousInvestmentValue * (1 + investmentGrowthRate)) + 
+    let newInvestmentValue = (previousInvestmentValue * (1 + generalInvestmentGrowthRate)) + 
                         total401kContribution + annualMonthlyInvestments + annualIraContributions;
 
     // Update the ref with the new value for next iteration
     currentInvestmentValueRef.current = newInvestmentValue;
 
-    // Apply market growth to tech stock holdings (tech stocks typically track with market)
+    // Apply tech-specific growth to tech stock holdings
+    const techGrowthRate = newEconomicState.investmentReturns.tech;
     const previousTechStockValue = currentTechStockValueRef.current;
-    let newTechStockValue = previousTechStockValue * (1 + investmentGrowthRate);
+    let newTechStockValue = previousTechStockValue * (1 + techGrowthRate);
     
     // Update the ref with the new tech stock value for next iteration
     currentTechStockValueRef.current = newTechStockValue;
@@ -465,8 +475,10 @@ export const LifeSimulator: React.FC = () => {
         year: debugYear,
         age: newAge,
         previousInvestmentValue: previousInvestmentValue,
-        investmentGrowthRate: investmentGrowthRate,
-        growthAmount: previousInvestmentValue * investmentGrowthRate,
+        generalInvestmentGrowthRate: generalInvestmentGrowthRate,
+        techGrowthRate: techGrowthRate,
+        generalGrowthAmount: previousInvestmentValue * generalInvestmentGrowthRate,
+        techGrowthAmount: previousTechStockValue * techGrowthRate,
         breakdown: {
           annual401kTraditional: investmentBreakdown.annual401kTraditional,
           annual401kRoth: investmentBreakdown.annual401kRoth,
@@ -477,6 +489,7 @@ export const LifeSimulator: React.FC = () => {
         iraContributions: annualIraContributions,
         totalNewContributions: total401kContribution + annualMonthlyInvestments + annualIraContributions,
         newInvestmentValue: newInvestmentValue,
+        newTechStockValue: newTechStockValue,
         investmentChange: newInvestmentValue - previousInvestmentValue
       });
       
@@ -817,9 +830,8 @@ export const LifeSimulator: React.FC = () => {
     });
     setHistoricalData([]);
     setHasStarted(false);
-    // Don't reset setup completion - user should stay on Dashboard after reset
-    // setSetupCompleted(false);
-    // setSetupStep(1);
+    // NOTE: Do NOT reset setupCompleted - user should stay on dashboard after reset
+    setSetupStep(1);
     setSalaryActionTaken(false);
     setRecentEvents([]);
     
@@ -828,14 +840,7 @@ export const LifeSimulator: React.FC = () => {
     setCurrentYearlySummary(null);
     
     // Reset economic state
-    setEconomicState({
-      currentInflationRate: 0.025,
-      cumulativeInflation: 1.0,
-      stockMarketIndex: 5000,
-      stockMarketGrowth: 0.10,
-      economicCycle: 'expansion',
-      yearsInCurrentCycle: 0
-    });
+    setEconomicState(createInitialEconomicState());
     
     // Reset all refs
     currentStockIndexRef.current = 5000;
@@ -901,15 +906,8 @@ export const LifeSimulator: React.FC = () => {
 
   // Handle edit profile action
   const handleEditProfile = () => {
-    // Reset personal data to force re-entry
-    setPersonalData(prev => ({ ...prev, age: 0, currentSalary: 0, state: '' }));
-    setFinancials(prev => ({ ...prev, currentSalary: 0 }));
-    
-    // Reset setup completion state to require going through setup wizard again
+    // Don't reset data, just go back to setup to allow editing
     setSetupCompleted(false);
-    setSetupStep(1);
-    
-    // Navigate to personal mode which will show the setup wizard
     setCurrentMode('personal');
   };
 
@@ -932,7 +930,13 @@ export const LifeSimulator: React.FC = () => {
         monthlyRent: 2200, // Custom rent vs CA average of 2800
         weeklyGroceries: 110, // Custom groceries vs CA average of 125
         iraTraditionalHoldings: 5000,
+        iraTraditionalTechHoldings: 0,
         iraRothHoldings: 8000,
+        iraRothTechHoldings: 0,
+        the401kTraditionalHoldings: 0,
+        the401kTraditionalTechHoldings: 0,
+        the401kRothHoldings: 0,
+        the401kRothTechHoldings: 0,
         savings: 15000,
         investments: 5000,
         techStockHoldings: 15000, // Tech worker with stock options
@@ -956,7 +960,13 @@ export const LifeSimulator: React.FC = () => {
         monthlyRent: undefined, // Will use TX state average
         weeklyGroceries: undefined, // Will use TX state average
         iraTraditionalHoldings: 45000,
+        iraTraditionalTechHoldings: 0,
         iraRothHoldings: 15000,
+        iraRothTechHoldings: 0,
+        the401kTraditionalHoldings: 0,
+        the401kTraditionalTechHoldings: 0,
+        the401kRothHoldings: 0,
+        the401kRothTechHoldings: 0,
         savings: 45000,
         investments: 35000,
         techStockHoldings: 8000, // Government worker with some tech stock investments
@@ -980,7 +990,18 @@ export const LifeSimulator: React.FC = () => {
         monthlyRent: 1400, // Custom rent vs FL average of 1750
         weeklyGroceries: 95, // Custom groceries vs FL average of 108
         iraTraditionalHoldings: 0,
+        iraTraditionalTechHoldings: 0,
         iraRothHoldings: 3000,
+        iraRothTechHoldings: 0,
+        the401kTraditionalHoldings: 0,
+        the401kTraditionalTechHoldings: 0,
+        the401kRothHoldings: 0,
+        the401kRothTechHoldings: 0,
+        personalInvestmentCash: 0,
+        iraTraditionalCash: 0,
+        iraRothCash: 0,
+        the401kTraditionalCash: 0,
+        the401kRothCash: 0,
         savings: 8000,
         investments: 2000,
         techStockHoldings: 1500, // Service worker with small tech stock investment
@@ -1612,11 +1633,11 @@ export const LifeSimulator: React.FC = () => {
 
   const renderInvestmentsPage = () => {
     return (
-      <InvestmentsPage
+      <AccountBasedInvestmentPage
         data={personalData}
         setData={setPersonalData}
         navigate={(page: string) => setCurrentMode(page as SimulationMode)}
-        formatCurrency={(amount: number) => amount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        formatCurrency={(amount: number) => amount.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
         hasStarted={hasStarted}
         simulationState={simulationState}
         simulationProgress={simulationProgress}
@@ -1624,7 +1645,7 @@ export const LifeSimulator: React.FC = () => {
         onPause={pauseSimulation}
         onReset={resetSimulation}
         onEditProfile={handleEditProfile}
-        financials={financials}
+        economicState={economicState}
       />
     );
   };
@@ -2671,35 +2692,35 @@ export const LifeSimulator: React.FC = () => {
           return renderPersonalSetupWizard();
         }
         
-        // If setup is completed, show the main dashboard
-        if (setupCompleted) {
-          return (
-            <Dashboard
-              personalData={personalData}
-              financials={financials}
-              currentAnnualExpenses={calculateAnnualExpenses()}
-              hasStarted={hasStarted}
-              simulationState={simulationState}
-              simulationProgress={simulationProgress}
-              historicalData={historicalData}
-              economicState={economicState}
-              recentEvents={recentEvents}
-              taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
-                personalData.currentSalary * personalData.contributions401kTraditional / 100,
-                personalData.currentSalary * personalData.contributions401kRoth / 100)}
-              setCurrentMode={setCurrentMode}
-              showYearlyReports={showYearlyReports}
-              onToggleYearlyReports={setShowYearlyReports}
-              startSimulation={startSimulation}
-              pauseSimulation={pauseSimulation}
-              resetSimulation={resetSimulation}
-              handleEditProfile={handleEditProfile}
-            />
-          );
+        // Only show setup screen if explicitly not completed
+        if (!setupCompleted) {
+          return renderPersonalSetupWizard();
         }
         
-        // If setup not completed but all required data exists, continue showing setup wizard
-        return renderPersonalSetupWizard();
+        // Otherwise show the main dashboard
+        return (
+          <Dashboard
+            personalData={personalData}
+            financials={financials}
+            currentAnnualExpenses={calculateAnnualExpenses()}
+            hasStarted={hasStarted}
+            simulationState={simulationState}
+            simulationProgress={simulationProgress}
+            historicalData={historicalData}
+            economicState={economicState}
+            recentEvents={recentEvents}
+            taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
+              personalData.currentSalary * personalData.contributions401kTraditional / 100,
+              personalData.currentSalary * personalData.contributions401kRoth / 100)}
+            setCurrentMode={setCurrentMode}
+            showYearlyReports={showYearlyReports}
+            onToggleYearlyReports={setShowYearlyReports}
+            startSimulation={startSimulation}
+            pauseSimulation={pauseSimulation}
+            resetSimulation={resetSimulation}
+            handleEditProfile={handleEditProfile}
+          />
+        );
       case 'salary':
         return renderSalaryPage();
       case 'expenses':
