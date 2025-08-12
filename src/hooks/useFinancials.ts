@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PersonalFinancialData } from '../types/simulation';
-import { calculateNetWorth } from '../utils/calculationUtils';
+import { calculatePersonalNetWorth } from '../utils/financialCalculations';
 
 interface FinancialState {
   currentSalary: number;
@@ -41,8 +41,8 @@ export const useFinancials = ({ personalData, calculateAnnualExpenses }: UseFina
     const annualExpenses = calculateAnnualExpenses();
     
     setFinancials(prev => {
-      // Use the same net worth calculation as everywhere else in the app
-      const netWorth = calculateNetWorth(personalData);
+      // Use the new net worth calculation for PersonalFinancialData
+      const netWorth = calculatePersonalNetWorth(personalData);
       
       return {
         ...prev,
@@ -61,6 +61,18 @@ export const useFinancials = ({ personalData, calculateAnnualExpenses }: UseFina
     personalData.iraRothHoldings,
     personalData.techStockHoldings,
     personalData.debtAmount,
+    // Add missing investment account dependencies
+    personalData.iraTraditionalTechHoldings,
+    personalData.iraRothTechHoldings,
+    personalData.the401kTraditionalHoldings,
+    personalData.the401kTraditionalTechHoldings,
+    personalData.the401kRothHoldings,
+    personalData.the401kRothTechHoldings,
+    personalData.personalInvestmentCash,
+    personalData.iraTraditionalCash,
+    personalData.iraRothCash,
+    personalData.the401kTraditionalCash,
+    personalData.the401kRothCash,
     calculateAnnualExpenses
   ]);
 

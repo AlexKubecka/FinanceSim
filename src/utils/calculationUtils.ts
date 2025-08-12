@@ -15,6 +15,18 @@ export interface PersonalData {
   techStockHoldings: number;
   iraTraditionalHoldings: number;
   iraRothHoldings: number;
+  // Additional investment account fields for account-based system
+  iraTraditionalTechHoldings?: number;
+  iraRothTechHoldings?: number;
+  the401kTraditionalHoldings?: number;
+  the401kTraditionalTechHoldings?: number;
+  the401kRothHoldings?: number;
+  the401kRothTechHoldings?: number;
+  personalInvestmentCash?: number;
+  iraTraditionalCash?: number;
+  iraRothCash?: number;
+  the401kTraditionalCash?: number;
+  the401kRothCash?: number;
   debtAmount: number;
   age: number;
 }
@@ -153,16 +165,39 @@ export const calculateTaxes = (
 };
 
 export const calculateNetWorth = (personalData: PersonalData): number => {
-  const totalInvestmentValue = personalData.investments + 
+  // Calculate total portfolio value across all investment accounts
+  const totalPortfolioValue = 
+    // Personal taxable account
+    (personalData.investments || 0) + 
+    (personalData.techStockHoldings || 0) +
+    (personalData.personalInvestmentCash || 0) +
+    
+    // Traditional IRA
     (personalData.iraTraditionalHoldings || 0) + 
+    (personalData.iraTraditionalTechHoldings || 0) +
+    (personalData.iraTraditionalCash || 0) +
+    
+    // Roth IRA
     (personalData.iraRothHoldings || 0) +
-    (personalData.techStockHoldings || 0);
+    (personalData.iraRothTechHoldings || 0) +
+    (personalData.iraRothCash || 0) +
+    
+    // Traditional 401k
+    (personalData.the401kTraditionalHoldings || 0) +
+    (personalData.the401kTraditionalTechHoldings || 0) +
+    (personalData.the401kTraditionalCash || 0) +
+    
+    // Roth 401k
+    (personalData.the401kRothHoldings || 0) +
+    (personalData.the401kRothTechHoldings || 0) +
+    (personalData.the401kRothCash || 0);
   
+  // Calculate total bank balance
   const totalBankBalance = (personalData.savingsAccount ?? 0) + 
                           (personalData.checkingAccount ?? 0) + 
                           (personalData.hysaAccount ?? 0);
   
-  const totalAssets = totalBankBalance + totalInvestmentValue;
+  const totalAssets = totalBankBalance + totalPortfolioValue;
   const totalLiabilities = personalData.debtAmount;
   
   return totalAssets - totalLiabilities;

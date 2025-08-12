@@ -8,6 +8,7 @@ import {
 } from '../types/simulation';
 import { SimulationControls } from './SimulationControls';
 import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
+import { calculateTotalPortfolioValue } from '../utils/financialCalculations';
 
 // Interactive Net Worth Chart Component
 interface NetWorthChartProps {
@@ -288,8 +289,15 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   onReset,
   onEditProfile
 }) => {
-  // Calculate investment breakdown using centralized utility
-  const investmentBreakdown = calculateInvestmentBreakdown(personalData, financials.investmentAccountValue || 0);
+  // Calculate investment breakdown using simulation values when available
+  // Use historical data if simulation is running, otherwise use personalData
+  const totalInvestmentValue = (() => {
+    if (historicalData.length > 0) {
+      return historicalData[historicalData.length - 1]?.investments || 0;
+    }
+    return calculateTotalPortfolioValue(personalData);
+  })();
+  const investmentBreakdown = calculateInvestmentBreakdown(personalData, totalInvestmentValue);
 
   // Calculate bank account balances (with backwards compatibility)
   const savingsBalance = personalData.savingsAccount ?? 0;
@@ -306,7 +314,7 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
     checking: checkingBalance,
     hysa: hysaBalance,
     legacy: legacySavings, // For backwards compatibility
-    investments: financials.investmentAccountValue || 0, // This now includes tech stocks from simulation
+    investments: totalInvestmentValue, // Use comprehensive calculation for all accounts
     retirement: 0, // Could be calculated from 401k contributions over time
     other: 0
   };
@@ -321,13 +329,11 @@ export const NetWorthPage: React.FC<NetWorthPageProps> = ({
   const totalAssets = Object.values(assets).reduce((sum, value) => sum + value, 0);
   const totalLiabilities = Object.values(liabilities).reduce((sum, value) => sum + value, 0);
   
-  // Calculate net worth properly: Total Assets - Total Liabilities
-  const calculatedNetWorth = totalAssets - totalLiabilities;
-  
-  // Use simulation values when available (they're authoritative), otherwise use calculated value
-  const netWorth = hasStarted && historicalData.length > 0 
-    ? historicalData[historicalData.length - 1]?.netWorth || financials.netWorth || calculatedNetWorth
-    : financials.netWorth || calculatedNetWorth;
+  // Use the same single source of truth as Dashboard - always use financials.netWorth when available
+  // This ensures both Dashboard and NetWorthPage show identical values
+  const netWorth = historicalData.length > 0 
+    ? historicalData[historicalData.length - 1]?.netWorth || financials.netWorth
+    : financials.netWorth;
 
   // Calculate net worth trend
   const getNetWorthTrend = () => {

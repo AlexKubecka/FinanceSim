@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PiggyBank, DollarSign, TrendingUp, Calendar, Shield, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { PiggyBank, DollarSign, TrendingUp, Calendar, Shield, ArrowRightLeft, AlertTriangle, Edit3, Check, X } from 'lucide-react';
 import { 
   PersonalFinancialData, 
   SimulationProgress, 
@@ -70,6 +70,14 @@ export const BankAccountPage: React.FC<BankAccountPageProps> = ({
   const [transferFrom, setTransferFrom] = useState<'savings' | 'checking' | 'hysa'>('savings');
   const [transferTo, setTransferTo] = useState<'savings' | 'checking' | 'hysa'>('hysa');
   
+  // Edit state management
+  const [editingAccount, setEditingAccount] = useState<'checking' | 'savings' | 'hysa' | null>(null);
+  const [editValues, setEditValues] = useState({
+    checking: '',
+    savings: '',
+    hysa: ''
+  });
+  
   // Calculate bank account balances (with backwards compatibility)
   const savingsBalance = personalData.savingsAccount ?? 0;
   const checkingBalance = personalData.checkingAccount ?? 0;
@@ -127,6 +135,54 @@ export const BankAccountPage: React.FC<BankAccountPageProps> = ({
     setTransferAmount(0);
   };
   
+  // Edit functionality handlers
+  const handleStartEdit = (account: 'checking' | 'savings' | 'hysa') => {
+    setEditingAccount(account);
+    const currentValue = account === 'checking' ? checkingBalance : 
+                        account === 'savings' ? savingsBalance : hysaBalance;
+    setEditValues(prev => ({
+      ...prev,
+      [account]: currentValue.toString()
+    }));
+  };
+  
+  const handleSaveEdit = () => {
+    if (!editingAccount) return;
+    
+    const newValue = parseFloat(editValues[editingAccount]);
+    if (isNaN(newValue) || newValue < 0) {
+      alert('Please enter a valid positive number.');
+      return;
+    }
+    
+    setPersonalData(prev => ({
+      ...prev,
+      [`${editingAccount}Account`]: newValue
+    }));
+    
+    setEditingAccount(null);
+    setEditValues(prev => ({
+      ...prev,
+      [editingAccount!]: ''
+    }));
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingAccount(null);
+    setEditValues({
+      checking: '',
+      savings: '',
+      hysa: ''
+    });
+  };
+  
+  const handleEditValueChange = (account: 'checking' | 'savings' | 'hysa', value: string) => {
+    setEditValues(prev => ({
+      ...prev,
+      [account]: value
+    }));
+  };
+  
   return (
     <div className="space-y-8">
       {/* Persistent Simulation Controls */}
@@ -165,7 +221,50 @@ export const BankAccountPage: React.FC<BankAccountPageProps> = ({
               <PiggyBank className="h-8 w-8 text-blue-600" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Savings Account</h3>
-            <p className="text-3xl font-bold text-blue-600">{formatCurrency(savingsBalance)}</p>
+            
+            {/* Edit functionality for balance */}
+            {editingAccount === 'savings' ? (
+              <div className="space-y-3">
+                <input
+                  type="number"
+                  value={editValues.savings}
+                  onChange={(e) => handleEditValueChange('savings', e.target.value)}
+                  className="w-full text-center text-2xl font-bold text-blue-600 bg-white border-2 border-blue-300 rounded px-2 py-1"
+                  placeholder="Enter amount"
+                  autoFocus
+                />
+                <div className="flex justify-center space-x-2">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex items-center px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="flex items-center px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-center space-x-2">
+                  <p className="text-3xl font-bold text-blue-600">{formatCurrency(savingsBalance)}</p>
+                  <button
+                    onClick={() => handleStartEdit('savings')}
+                    className="text-blue-600 hover:text-blue-800 p-1"
+                    title="Edit balance"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <p className="text-sm text-gray-600 mt-2">APY: 0.05%</p>
             {savingsBalance > 0 && (
               <div className="mt-2 p-2 bg-orange-100 rounded text-xs text-orange-800">
@@ -181,7 +280,50 @@ export const BankAccountPage: React.FC<BankAccountPageProps> = ({
               <DollarSign className="h-8 w-8 text-green-600" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Checking Account</h3>
-            <p className="text-3xl font-bold text-green-600">{formatCurrency(checkingBalance)}</p>
+            
+            {/* Edit functionality for balance */}
+            {editingAccount === 'checking' ? (
+              <div className="space-y-3">
+                <input
+                  type="number"
+                  value={editValues.checking}
+                  onChange={(e) => handleEditValueChange('checking', e.target.value)}
+                  className="w-full text-center text-2xl font-bold text-green-600 bg-white border-2 border-green-300 rounded px-2 py-1"
+                  placeholder="Enter amount"
+                  autoFocus
+                />
+                <div className="flex justify-center space-x-2">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex items-center px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="flex items-center px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-center space-x-2">
+                  <p className="text-3xl font-bold text-green-600">{formatCurrency(checkingBalance)}</p>
+                  <button
+                    onClick={() => handleStartEdit('checking')}
+                    className="text-green-600 hover:text-green-800 p-1"
+                    title="Edit balance"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <p className="text-sm text-gray-600 mt-2">APY: 0%</p>
             <p className="text-xs text-gray-500 mt-1">For daily expenses</p>
           </div>
@@ -192,7 +334,50 @@ export const BankAccountPage: React.FC<BankAccountPageProps> = ({
               <TrendingUp className="h-8 w-8 text-purple-600" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">High Yield Savings</h3>
-            <p className="text-3xl font-bold text-purple-600">{formatCurrency(hysaBalance)}</p>
+            
+            {/* Edit functionality for balance */}
+            {editingAccount === 'hysa' ? (
+              <div className="space-y-3">
+                <input
+                  type="number"
+                  value={editValues.hysa}
+                  onChange={(e) => handleEditValueChange('hysa', e.target.value)}
+                  className="w-full text-center text-2xl font-bold text-purple-600 bg-white border-2 border-purple-300 rounded px-2 py-1"
+                  placeholder="Enter amount"
+                  autoFocus
+                />
+                <div className="flex justify-center space-x-2">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex items-center px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="flex items-center px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-center space-x-2">
+                  <p className="text-3xl font-bold text-purple-600">{formatCurrency(hysaBalance)}</p>
+                  <button
+                    onClick={() => handleStartEdit('hysa')}
+                    className="text-purple-600 hover:text-purple-800 p-1"
+                    title="Edit balance"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <p className="text-sm text-gray-600 mt-2">APY: 4.0%</p>
             <div className="absolute top-2 right-2">
               <span className="bg-purple-200 text-purple-800 text-xs px-2 py-1 rounded-full">

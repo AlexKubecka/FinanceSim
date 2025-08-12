@@ -11,6 +11,7 @@ import {
 import { SimulationControls } from './SimulationControls';
 import { ProgressTimeline } from './ProgressTimeline';
 import { LifeProgressBar } from './LifeProgressBar';
+import { calculateTotalPortfolioValue } from '../utils/financialCalculations';
 
 type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
 
@@ -468,7 +469,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <p className="text-sm text-gray-600">Total Invested</p>
               <p className="text-lg font-bold text-purple-600">
-                ${(financials.investmentAccountValue || personalData.investments || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                ${(() => {
+                  // Use historical data if simulation is running, otherwise use personalData
+                  if (historicalData.length > 0) {
+                    return (historicalData[historicalData.length - 1]?.investments || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                  }
+                  return calculateTotalPortfolioValue(personalData).toLocaleString('en-US', { maximumFractionDigits: 0 });
+                })()}
               </p>
             </div>
             <div>

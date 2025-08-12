@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Plus, Minus, BarChart3, DollarSign, Activity, ArrowLeft, Building2, User, PieChart } from 'lucide-react';
-import { PersonalFinancialData, SimulationState, SimulationProgress, EconomicState } from '../types/simulation';
+import { PersonalFinancialData, SimulationState, SimulationProgress, EconomicState, HistoricalDataPoint } from '../types/simulation';
 import { Investment, TransactionHistory, PortfolioData, InvestmentAccount, AccountType, InvestmentType } from '../types/investment';
 import { SimulationControls } from './SimulationControls';
 import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Area, AreaChart } from 'recharts';
@@ -13,6 +13,7 @@ interface AccountBasedInvestmentPageProps {
   hasStarted?: boolean;
   simulationState?: SimulationState;
   simulationProgress?: SimulationProgress;
+  historicalData?: HistoricalDataPoint[];
   onStart?: () => void;
   onPause?: () => void;
   onReset?: () => void;
@@ -28,6 +29,7 @@ const AccountBasedInvestmentPage: React.FC<AccountBasedInvestmentPageProps> = ({
   hasStarted,
   simulationState,
   simulationProgress,
+  historicalData,
   onStart,
   onPause,
   onReset,
@@ -59,6 +61,110 @@ const AccountBasedInvestmentPage: React.FC<AccountBasedInvestmentPageProps> = ({
     const sp500Price = 450;
     const techPrice = 180;
     
+    // If simulation is running, scale all account values proportionally
+    if (hasStarted && historicalData && historicalData.length > 0) {
+      const currentSimulationData = historicalData[historicalData.length - 1];
+      const currentTotalSimulationValue = currentSimulationData.investments || 0;
+      
+      // Calculate original total value from personalData
+      const originalTotalValue = (data.investments || 0) + (data.techStockHoldings || 0) + (data.personalInvestmentCash || 0) +
+                                (data.iraTraditionalHoldings || 0) + (data.iraTraditionalTechHoldings || 0) + (data.iraTraditionalCash || 0) +
+                                (data.iraRothHoldings || 0) + (data.iraRothTechHoldings || 0) + (data.iraRothCash || 0) +
+                                (data.the401kTraditionalHoldings || 0) + (data.the401kTraditionalTechHoldings || 0) + (data.the401kTraditionalCash || 0) +
+                                (data.the401kRothHoldings || 0) + (data.the401kRothTechHoldings || 0) + (data.the401kRothCash || 0);
+      
+      // Calculate scaling factor to apply proportional growth to all accounts
+      const scalingFactor = originalTotalValue > 0 ? currentTotalSimulationValue / originalTotalValue : 1;
+      
+      // Apply scaling to all accounts to maintain proportions
+      return [
+        {
+          id: 'personal',
+          name: 'Personal Taxable Account (Simulation)',
+          description: 'Individual investment account - values adjusted for simulation growth',
+          cashBalance: (data.personalInvestmentCash || 0) * scalingFactor,
+          totalValue: ((data.investments || 0) + (data.techStockHoldings || 0) + (data.personalInvestmentCash || 0)) * scalingFactor,
+          holdings: {
+            cash: { investmentType: 'cash', shares: 1, totalValue: (data.personalInvestmentCash || 0) * scalingFactor },
+            sp500: { investmentType: 'sp500', shares: ((data.investments || 0) * scalingFactor) / sp500Price, totalValue: (data.investments || 0) * scalingFactor },
+            tech: { investmentType: 'tech', shares: ((data.techStockHoldings || 0) * scalingFactor) / techPrice, totalValue: (data.techStockHoldings || 0) * scalingFactor },
+            treasuries: { investmentType: 'treasuries', shares: 0, totalValue: 0 },
+            bonds: { investmentType: 'bonds', shares: 0, totalValue: 0 }
+          },
+          taxAdvantaged: false
+        },
+        {
+          id: 'ira-traditional',
+          name: 'Traditional IRA (Simulation)',
+          description: 'Tax-deferred retirement account - values adjusted for simulation growth',
+          cashBalance: (data.iraTraditionalCash || 0) * scalingFactor,
+          totalValue: ((data.iraTraditionalHoldings || 0) + (data.iraTraditionalTechHoldings || 0) + (data.iraTraditionalCash || 0)) * scalingFactor,
+          holdings: {
+            cash: { investmentType: 'cash', shares: 1, totalValue: (data.iraTraditionalCash || 0) * scalingFactor },
+            sp500: { investmentType: 'sp500', shares: ((data.iraTraditionalHoldings || 0) * scalingFactor) / sp500Price, totalValue: (data.iraTraditionalHoldings || 0) * scalingFactor },
+            tech: { investmentType: 'tech', shares: ((data.iraTraditionalTechHoldings || 0) * scalingFactor) / techPrice, totalValue: (data.iraTraditionalTechHoldings || 0) * scalingFactor },
+            treasuries: { investmentType: 'treasuries', shares: 0, totalValue: 0 },
+            bonds: { investmentType: 'bonds', shares: 0, totalValue: 0 }
+          },
+          taxAdvantaged: true,
+          contributionLimit: 6500,
+          penaltyAge: 59.5
+        },
+        {
+          id: 'ira-roth',
+          name: 'Roth IRA (Simulation)',
+          description: 'Tax-free retirement account - values adjusted for simulation growth',
+          cashBalance: (data.iraRothCash || 0) * scalingFactor,
+          totalValue: ((data.iraRothHoldings || 0) + (data.iraRothTechHoldings || 0) + (data.iraRothCash || 0)) * scalingFactor,
+          holdings: {
+            cash: { investmentType: 'cash', shares: 1, totalValue: (data.iraRothCash || 0) * scalingFactor },
+            sp500: { investmentType: 'sp500', shares: ((data.iraRothHoldings || 0) * scalingFactor) / sp500Price, totalValue: (data.iraRothHoldings || 0) * scalingFactor },
+            tech: { investmentType: 'tech', shares: ((data.iraRothTechHoldings || 0) * scalingFactor) / techPrice, totalValue: (data.iraRothTechHoldings || 0) * scalingFactor },
+            treasuries: { investmentType: 'treasuries', shares: 0, totalValue: 0 },
+            bonds: { investmentType: 'bonds', shares: 0, totalValue: 0 }
+          },
+          taxAdvantaged: true,
+          contributionLimit: 6500,
+          penaltyAge: 59.5
+        },
+        {
+          id: '401k-traditional',
+          name: '401(k) Traditional (Simulation)',
+          description: 'Employer-sponsored pre-tax retirement account - values adjusted for simulation growth',
+          cashBalance: (data.the401kTraditionalCash || 0) * scalingFactor,
+          totalValue: ((data.the401kTraditionalHoldings || 0) + (data.the401kTraditionalTechHoldings || 0) + (data.the401kTraditionalCash || 0)) * scalingFactor,
+          holdings: {
+            cash: { investmentType: 'cash', shares: 1, totalValue: (data.the401kTraditionalCash || 0) * scalingFactor },
+            sp500: { investmentType: 'sp500', shares: ((data.the401kTraditionalHoldings || 0) * scalingFactor) / sp500Price, totalValue: (data.the401kTraditionalHoldings || 0) * scalingFactor },
+            tech: { investmentType: 'tech', shares: ((data.the401kTraditionalTechHoldings || 0) * scalingFactor) / techPrice, totalValue: (data.the401kTraditionalTechHoldings || 0) * scalingFactor },
+            treasuries: { investmentType: 'treasuries', shares: 0, totalValue: 0 },
+            bonds: { investmentType: 'bonds', shares: 0, totalValue: 0 }
+          },
+          taxAdvantaged: true,
+          contributionLimit: 23000,
+          penaltyAge: 59.5
+        },
+        {
+          id: '401k-roth',
+          name: '401(k) Roth (Simulation)',
+          description: 'Employer-sponsored after-tax retirement account - values adjusted for simulation growth',
+          cashBalance: (data.the401kRothCash || 0) * scalingFactor,
+          totalValue: ((data.the401kRothHoldings || 0) + (data.the401kRothTechHoldings || 0) + (data.the401kRothCash || 0)) * scalingFactor,
+          holdings: {
+            cash: { investmentType: 'cash', shares: 1, totalValue: (data.the401kRothCash || 0) * scalingFactor },
+            sp500: { investmentType: 'sp500', shares: ((data.the401kRothHoldings || 0) * scalingFactor) / sp500Price, totalValue: (data.the401kRothHoldings || 0) * scalingFactor },
+            tech: { investmentType: 'tech', shares: ((data.the401kRothTechHoldings || 0) * scalingFactor) / techPrice, totalValue: (data.the401kRothTechHoldings || 0) * scalingFactor },
+            treasuries: { investmentType: 'treasuries', shares: 0, totalValue: 0 },
+            bonds: { investmentType: 'bonds', shares: 0, totalValue: 0 }
+          },
+          taxAdvantaged: true,
+          contributionLimit: 23000,
+          penaltyAge: 59.5
+        }
+      ];
+    }
+    
+    // Normal detailed view when simulation is not running
     return [
       {
         id: 'personal',
@@ -145,6 +251,8 @@ const AccountBasedInvestmentPage: React.FC<AccountBasedInvestmentPageProps> = ({
       }
     ];
   }, [
+    hasStarted,
+    historicalData,
     data.investments, 
     data.techStockHoldings, 
     data.iraTraditionalHoldings, 

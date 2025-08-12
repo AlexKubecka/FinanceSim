@@ -9,7 +9,7 @@ import AccountBasedInvestmentPage from '../components/AccountBasedInvestmentPage
 import { BankAccountPage } from '../components/BankAccountPage';
 import { YearEndSummaryModal } from '../components/YearEndSummaryModal';
 import { YearEndReportsPage } from '../components/YearEndReportsPage';
-import { get401kLimit } from '../utils/financialCalculations';
+import { get401kLimit, calculatePersonalNetWorth, calculateTotalPortfolioValue, calculateNonTechPortfolioValue, calculateTechStockValue } from '../utils/financialCalculations';
 import { calculateInvestmentBreakdown } from '../utils/investmentCalculations';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { simulateEconomicStep, createInitialEconomicState } from '../services/economicSimulation';
@@ -402,19 +402,31 @@ export const LifeSimulator: React.FC = () => {
     
     // Update the ref with the new tech stock value for next iteration
     currentTechStockValueRef.current = newTechStockValue;
-    
-    // Update personalData with new tech stock value for consistent display
-    setPersonalData(prev => ({
-      ...prev,
-      techStockHoldings: newTechStockValue
-    }));
 
     // Calculate net worth: Total Assets - Total Liabilities (same as NetWorthPage)
-    // Use the values that will be in the final state for consistency with display
-    // Assets = Cash + Investments + Tech Stock + Retirement + Other
-    // Liabilities = Debt + Credit Cards + Loans + Other
-    const totalAssets = newTotalBankBalance + newInvestmentValue + newTechStockValue + 0; // cash + investments + tech stock + other
-    const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other  
+    // Use the NEW calculated values (not the stale personalData values) for accurate calculation
+    const assets = {
+      savings: Math.max(0, newSavingsAccount),
+      checking: Math.max(0, newCheckingAccount),
+      hysa: Math.max(0, newHysaAccount),
+      legacy: 0, // Clear legacy to prevent double counting
+      investments: newInvestmentValue, // Use the comprehensive calculation for all accounts
+      techStock: newTechStockValue, // Include tech stock as separate asset
+      retirement: 0, // Could be calculated from 401k contributions over time
+      other: 0
+    };
+
+    const liabilities = {
+      debt: personalData.debtAmount || 0,
+      creditCards: 0, // Future enhancement
+      loans: 0, // Future enhancement
+      other: 0
+    };
+
+    const totalAssets = Object.values(assets).reduce((sum, value) => sum + value, 0);
+    const totalLiabilities = Object.values(liabilities).reduce((sum, value) => sum + value, 0);
+    
+    // Calculate net worth properly: Total Assets - Total Liabilities
     const calculatedNetWorth = totalAssets - totalLiabilities;
 
     // Calculate total investment value including tech stocks for consistent display
@@ -598,14 +610,13 @@ export const LifeSimulator: React.FC = () => {
       // Store the original salary value before any inflation adjustments
       originalSalaryRef.current = personalData.currentSalary;
       
-      // Initialize investment ref with current investment value plus IRA holdings from personalData
-      const totalStartingInvestments = personalData.investments + 
-        (personalData.iraTraditionalHoldings || 0) + 
-        (personalData.iraRothHoldings || 0);
-      currentInvestmentValueRef.current = totalStartingInvestments;
+      // Initialize investment ref with non-tech portfolio value (S&P 500 + cash only)
+      const totalStartingNonTechInvestments = calculateNonTechPortfolioValue(personalData);
+      currentInvestmentValueRef.current = totalStartingNonTechInvestments;
       
-      // Initialize tech stock ref with current tech stock holdings
-      currentTechStockValueRef.current = personalData.techStockHoldings || 0;
+      // Initialize tech stock ref with tech stock value from all accounts
+      const totalStartingTechInvestments = calculateTechStockValue(personalData);
+      currentTechStockValueRef.current = totalStartingTechInvestments;
       
       // Initialize savings ref with current total bank balance
       const currentTotalBank = (personalData.savingsAccount ?? 0) + 
@@ -638,27 +649,17 @@ export const LifeSimulator: React.FC = () => {
       
       // Initialize historical data with the starting point using proper net worth calculation
       // Same calculation as NetWorthPage: Total Assets - Total Liabilities
-      // Calculate total bank balance from new account system
-      const initialTotalBank = (personalData.savingsAccount ?? 0) + 
-                               (personalData.checkingAccount ?? 0) + 
-                               (personalData.hysaAccount ?? 0);
+      // Use the same comprehensive net worth calculation used throughout the app
+      const initialNetWorth = calculatePersonalNetWorth(personalData);
       
-      // Include ALL investment components like the simulation does
-      const initialTotalInvestments = (personalData.investments || 0) +
-                                     (personalData.iraTraditionalHoldings || 0) +
-                                     (personalData.iraRothHoldings || 0);
-      const initialTechStock = personalData.techStockHoldings || 0;
-      const initialTotalInvestmentsIncludingTechStock = initialTotalInvestments + initialTechStock;
-      
-      const totalAssets = initialTotalBank + initialTotalInvestments + initialTechStock; // cash + all investments + tech stock
-      const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
-      const initialNetWorth = totalAssets - totalLiabilities;
+      // Calculate total investments for historical tracking using comprehensive function
+      const initialTotalInvestments = calculateTotalPortfolioValue(personalData);
       
       setHistoricalData([{
         age: personalData.age,
         netWorth: initialNetWorth,
         salary: personalData.currentSalary,
-        investments: initialTotalInvestmentsIncludingTechStock,
+        investments: initialTotalInvestments,
         debt: personalData.debtAmount,
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
@@ -903,6 +904,36 @@ export const LifeSimulator: React.FC = () => {
       }
     };
   }, []);
+
+  // Update financials whenever personalData changes to ensure net worth is accurate
+  useEffect(() => {
+    setFinancials(prev => ({
+      ...prev,
+      netWorth: calculatePersonalNetWorth(personalData),
+      currentSalary: personalData.currentSalary
+    }));
+  }, [
+    personalData.currentSalary,
+    personalData.savingsAccount,
+    personalData.checkingAccount,
+    personalData.hysaAccount,
+    personalData.investments,
+    personalData.techStockHoldings,
+    personalData.iraTraditionalHoldings,
+    personalData.iraRothHoldings,
+    personalData.iraTraditionalTechHoldings,
+    personalData.iraRothTechHoldings,
+    personalData.the401kTraditionalHoldings,
+    personalData.the401kTraditionalTechHoldings,
+    personalData.the401kRothHoldings,
+    personalData.the401kRothTechHoldings,
+    personalData.personalInvestmentCash,
+    personalData.iraTraditionalCash,
+    personalData.iraRothCash,
+    personalData.the401kTraditionalCash,
+    personalData.the401kRothCash,
+    personalData.debtAmount
+  ]);
 
   // Handle edit profile action
   const handleEditProfile = () => {
@@ -1283,26 +1314,16 @@ export const LifeSimulator: React.FC = () => {
     const annualExpenses = calculateAnnualExpenses();
     
     // Calculate proper net worth: Assets - Liabilities (same as NetWorthPage)
-    // Net worth = Cash savings + Investment accounts (including IRA holdings) + Tech stock + 401k balance - Debt
-    const totalInvestmentValue = personalData.investments + 
-      (personalData.iraTraditionalHoldings || 0) + 
-      (personalData.iraRothHoldings || 0) +
-      (personalData.techStockHoldings || 0);
-    // Calculate total bank balance from new account system
-    const finalTotalBank = (personalData.savingsAccount ?? 0) + 
-                           (personalData.checkingAccount ?? 0) + 
-                           (personalData.hysaAccount ?? 0);
-    const totalAssets = finalTotalBank + totalInvestmentValue + 0 + 0; // cash + investments + retirement + other
-    const totalLiabilities = personalData.debtAmount + 0 + 0 + 0; // debt + creditCards + loans + other
-    const netWorth = totalAssets - totalLiabilities; // Include IRA holdings and tech stock in net worth calculation
+    // Use comprehensive portfolio calculation that includes all cash balances
+    const totalInvestmentValue = calculateTotalPortfolioValue(personalData);
+    const netWorth = calculatePersonalNetWorth(personalData);
     
-    // Initialize the investment ref with the current investment value if not started
-    // Initialize investment ref with current investment value plus IRA holdings (use same calculation)
-    currentInvestmentValueRef.current = totalInvestmentValue;
-    
-    // Initialize tech stock ref with current tech stock holdings
-    currentTechStockValueRef.current = personalData.techStockHoldings || 0;
-    currentTechStockValueRef.current = personalData.techStockHoldings || 0;
+    // Initialize the investment ref with non-tech portfolio value if not started
+    // Track non-tech investments and tech stocks separately for proper growth application
+    const nonTechInvestmentValue = calculateNonTechPortfolioValue(personalData);
+    const techStockValue = calculateTechStockValue(personalData);
+    currentInvestmentValueRef.current = nonTechInvestmentValue;
+    currentTechStockValueRef.current = techStockValue;
     
     // Initialize the savings ref with the current total bank balance
     const currentBankTotal = (personalData.savingsAccount ?? 0) + 
@@ -1317,7 +1338,7 @@ export const LifeSimulator: React.FC = () => {
       netWorth: netWorth,
       investmentAccountValue: totalInvestmentValue // Use same calculation as net worth
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount, personalData.techStockHoldings, personalData.iraTraditionalHoldings, personalData.iraRothHoldings]);
+  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount, personalData.techStockHoldings, personalData.iraTraditionalHoldings, personalData.iraRothHoldings, personalData.personalInvestmentCash, personalData.iraTraditionalCash, personalData.iraRothCash, personalData.the401kTraditionalCash, personalData.the401kRothCash, personalData.iraTraditionalTechHoldings, personalData.iraRothTechHoldings, personalData.the401kTraditionalHoldings, personalData.the401kTraditionalTechHoldings, personalData.the401kRothHoldings, personalData.the401kRothTechHoldings]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -1641,6 +1662,7 @@ export const LifeSimulator: React.FC = () => {
         hasStarted={hasStarted}
         simulationState={simulationState}
         simulationProgress={simulationProgress}
+        historicalData={historicalData}
         onStart={startSimulation}
         onPause={pauseSimulation}
         onReset={resetSimulation}
