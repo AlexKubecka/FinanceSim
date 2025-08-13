@@ -188,8 +188,9 @@ export const useSimulation = ({
     );
     const total401kContribution = annual401kContribution + employerMatch;
 
-    // Calculate monthly investment contributions (non-401k)
+    // Calculate monthly investment contributions (non-401k, non-IRA)
     const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
+    const annualIraContributions = (personalData.iraTraditionalContribution || 0) + (personalData.iraRothContribution || 0);
 
     // Apply investment growth to existing portfolio
     // Use S&P 500 growth rate for general investments
@@ -197,8 +198,20 @@ export const useSimulation = ({
     const previousInvestmentValue = financials.investmentAccountValue;
     
     // Calculate new investment value: previous value grows + new contributions
+    // Note: We include 401k and IRA in the total value for historical tracking, but allocate them separately
     newInvestmentValue = (previousInvestmentValue * (1 + investmentGrowthRate)) + 
-                        total401kContribution + annualMonthlyInvestments;
+                        total401kContribution + annualMonthlyInvestments + annualIraContributions;
+
+    // Also update the specific account holdings for retirement contributions
+    updatePersonalData({
+      // Allocate traditional 401(k) contributions (employee + all employer match)
+      the401kTraditionalHoldings: (personalData.the401kTraditionalHoldings || 0) + annual401kTraditional + employerMatch,
+      // Allocate Roth 401(k) contributions (employee only, no employer match)
+      the401kRothHoldings: (personalData.the401kRothHoldings || 0) + annual401kRoth,
+      // Also update IRA holdings with their contributions
+      iraTraditionalHoldings: (personalData.iraTraditionalHoldings || 0) + (personalData.iraTraditionalContribution || 0),
+      iraRothHoldings: (personalData.iraRothHoldings || 0) + (personalData.iraRothContribution || 0)
+    });
 
     updateFinancials({
       investmentAccountValue: newInvestmentValue,
@@ -235,6 +248,7 @@ export const useSimulation = ({
         salary: personalData.currentSalary,
         investments: newInvestmentValue,
         debt: 0,
+        debtPayment: 0,
         timestamp: new Date(),
         inflation: newEconomicState.currentInflationRate,
         stockMarketValue: newEconomicState.stockMarketIndex
@@ -278,6 +292,7 @@ export const useSimulation = ({
         salary: personalData.currentSalary,
         investments: financials.investmentAccountValue,
         debt: 0,
+        debtPayment: 0,
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
         stockMarketValue: economicState.stockMarketIndex

@@ -479,6 +479,22 @@ export const LifeSimulator: React.FC = () => {
     // Calculate total investment value including tech stocks for consistent display
     const totalInvestmentValueIncludingTechStock = newInvestmentValue + newTechStockValue;
 
+    // Update personalData with specific account allocations
+    // This ensures that 401k, IRA, and tech stock holdings are properly tracked separately
+    setPersonalData(prev => ({
+      ...prev,
+      // Update tech stock holdings with growth
+      techStockHoldings: newTechStockValue,
+      // Update general investments (this will be used by investment calculations for proportional allocation)
+      investments: newInvestmentValue,
+      // Allocate 401k contributions to specific accounts
+      the401kTraditionalHoldings: (prev.the401kTraditionalHoldings || 0) + (investmentBreakdown.annual401kTraditional * (1 + generalInvestmentGrowthRate)) + (investmentBreakdown.employerMatch * (1 + generalInvestmentGrowthRate)),
+      the401kRothHoldings: (prev.the401kRothHoldings || 0) + (investmentBreakdown.annual401kRoth * (1 + generalInvestmentGrowthRate)),
+      // Allocate IRA contributions to specific accounts
+      iraTraditionalHoldings: (prev.iraTraditionalHoldings || 0) + (personalData.iraTraditionalContribution * (1 + generalInvestmentGrowthRate)),
+      iraRothHoldings: (prev.iraRothHoldings || 0) + (personalData.iraRothContribution * (1 + generalInvestmentGrowthRate))
+    }));
+
     // Single setFinancials call to update both investment value and net worth
     setFinancials(prev => ({
       ...prev,

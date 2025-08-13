@@ -34,8 +34,9 @@ export const calculateInvestmentBreakdown = (
   
   const annualTaxableInvestment = personalData.monthlyInvestment * 12;
   
+  // Only include 401k and taxable investment contributions in the proportional allocation
+  // IRA contributions are handled separately since IRA accounts maintain their actual holdings
   const totalAnnualContributions = annual401kTraditional + annual401kRoth + employerMatch + 
-                                   personalData.iraTraditionalContribution + personalData.iraRothContribution + 
                                    annualTaxableInvestment;
 
   // Total starting IRA holdings
@@ -75,16 +76,11 @@ export const calculateInvestmentBreakdown = (
     totalAnnualContributions
   );
   
-  // IRA balances: always show starting holdings, plus any allocated growth
-  const traditionalIraBalance = (personalData.iraTraditionalHoldings || 0) + calculateAccountBalance(
-    personalData.iraTraditionalContribution, 
-    totalAnnualContributions
-  );
+  // IRA balances: only show their actual holdings without proportional allocation
+  // IRA contributions are handled separately from the investment growth allocation
+  const traditionalIraBalance = (personalData.iraTraditionalHoldings || 0);
   
-  const rothIraBalance = (personalData.iraRothHoldings || 0) + calculateAccountBalance(
-    personalData.iraRothContribution, 
-    totalAnnualContributions
-  );
+  const rothIraBalance = (personalData.iraRothHoldings || 0);
   
   const taxableBalance = calculateAccountBalance(
     annualTaxableInvestment, 
@@ -96,7 +92,9 @@ export const calculateInvestmentBreakdown = (
     annual401kRoth,
     employerMatch,
     annualTaxableInvestment,
-    totalAnnualContributions,
+    totalAnnualContributions: annual401kTraditional + annual401kRoth + employerMatch + 
+                             personalData.iraTraditionalContribution + personalData.iraRothContribution + 
+                             annualTaxableInvestment, // Include IRA contributions for display purposes
     traditional401kBalance,
     roth401kBalance,
     traditionalIraBalance,
