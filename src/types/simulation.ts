@@ -2,7 +2,7 @@
 import type { YearlySummary } from './yearlySummary';
 
 // Core simulation types
-export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
+export type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'debt' | 'reports';
 
 export type SimulationState = 'setup' | 'running' | 'paused' | 'completed';
 
@@ -61,6 +61,8 @@ export interface PersonalFinancialData {
   techStockHoldings: number; // Tech stock holdings (for stock options/tech investments)
   debtAmount: number;
   debtInterestRate: number;
+  debtPaymentPlan: 'none' | '30-year' | '15-year' | '5-year' | 'custom';
+  customDebtPayment: number; // For custom payment plans
   retirementAge: number;
   retirementGoal: number;
   emergencyFundMonths: number;
@@ -116,6 +118,7 @@ export interface HistoricalDataPoint {
   salary: number;
   investments: number;
   debt: number;
+  debtPayment: number; // Annual debt payment amount
   timestamp: Date;
   inflation: number;
   stockMarketValue: number;

@@ -3,8 +3,9 @@ import { User, Code } from 'lucide-react';
 import { PersonalFinancialData } from '../types/simulation';
 import { stateRentData, stateGroceryData } from '../utils/expenseData';
 import { get401kLimit } from '../utils/financialCalculations';
+import { calculateTaxes } from '../utils/calculationUtils';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'debt' | 'reports';
 
 interface SetupWizardProps {
   // Personal data state
@@ -197,6 +198,63 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   step="0.01"
                 />
               </div>
+
+              {/* Salary vs Expenses Warning */}
+              {personalData.currentSalary > 0 && personalData.state && (
+                (() => {
+                  const annualRent = stateRentData[personalData.state] * 12;
+                  const annualGrocery = stateGroceryData[personalData.state] * 12;
+                  const totalAnnualExpenses = annualRent + annualGrocery;
+                  const taxInfo = calculateTaxes(personalData.currentSalary, personalData.state);
+                  const monthlyAfterExpenses = (taxInfo.afterTaxIncome - totalAnnualExpenses) / 12;
+                  
+                  if (monthlyAfterExpenses < 0) {
+                    return (
+                      <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-4">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="h-6 w-6 text-red-500 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <h4 className="text-sm font-semibold text-red-800 mb-1">
+                              ⚠️ Income Warning
+                            </h4>
+                            <p className="text-sm text-red-700 mb-2">
+                              Your estimated take-home pay (${taxInfo.afterTaxIncome.toLocaleString()}) may not cover basic living expenses in {personalData.state} (~${totalAnnualExpenses.toLocaleString()}/year).
+                            </p>
+                            <div className="text-xs text-red-600">
+                              💡 Consider increasing income or choosing a lower-cost state
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (monthlyAfterExpenses < 500) {
+                    return (
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 mb-4">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="h-6 w-6 text-yellow-500 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <h4 className="text-sm font-semibold text-yellow-800 mb-1">
+                              💰 Tight Budget
+                            </h4>
+                            <p className="text-sm text-yellow-700">
+                              After basic expenses, you'll have about ${Math.round(monthlyAfterExpenses)}/month for savings, investments, and other costs.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Career Field</label>

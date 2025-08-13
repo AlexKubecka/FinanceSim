@@ -7,6 +7,7 @@ import { ModeSelectionPage } from '../components/ModeSelectionPage';
 import { NetWorthPage } from '../components/NetWorthPage';
 import AccountBasedInvestmentPage from '../components/AccountBasedInvestmentPage';
 import { BankAccountPage } from '../components/BankAccountPage';
+import { DebtPage } from '../components/DebtPage';
 import { YearEndSummaryModal } from '../components/YearEndSummaryModal';
 import { YearEndReportsPage } from '../components/YearEndReportsPage';
 import { get401kLimit, calculatePersonalNetWorth, calculateTotalPortfolioValue, calculateNonTechPortfolioValue, calculateTechStockValue } from '../utils/financialCalculations';
@@ -68,6 +69,8 @@ export const LifeSimulator: React.FC = () => {
     techStockHoldings: 0,
     debtAmount: 0,
     debtInterestRate: 0,
+    debtPaymentPlan: 'none',
+    customDebtPayment: 0,
     retirementAge: 65,
     retirementGoal: 1000000,
     emergencyFundMonths: 6,
@@ -340,13 +343,49 @@ export const LifeSimulator: React.FC = () => {
     const simulationYear = simulationProgress.currentDate.getFullYear();
     const taxInfo = calculateTaxes(personalData.currentSalary, personalData.state, contribution401kTraditional, contribution401kRoth, simulationYear);
     
+    // Calculate debt interest accrual and debt payments
+    const currentDebtAmount = personalData.debtAmount || 0;
+    const debtInterestRate = personalData.debtInterestRate || 0;
+    let newDebtAmount = currentDebtAmount * (1 + (debtInterestRate / 100));
+    
+    // Calculate debt payment based on selected plan
+    let annualDebtPayment = 0;
+    if (currentDebtAmount > 0 && personalData.debtPaymentPlan !== 'none') {
+      const monthlyRate = debtInterestRate / 100 / 12;
+      
+      if (personalData.debtPaymentPlan === '30-year') {
+        const monthsIn30Years = 30 * 12;
+        const monthlyPayment = monthlyRate > 0 
+          ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn30Years)) / (Math.pow(1 + monthlyRate, monthsIn30Years) - 1)
+          : currentDebtAmount / monthsIn30Years;
+        annualDebtPayment = monthlyPayment * 12;
+      } else if (personalData.debtPaymentPlan === '15-year') {
+        const monthsIn15Years = 15 * 12;
+        const monthlyPayment = monthlyRate > 0 
+          ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn15Years)) / (Math.pow(1 + monthlyRate, monthsIn15Years) - 1)
+          : currentDebtAmount / monthsIn15Years;
+        annualDebtPayment = monthlyPayment * 12;
+      } else if (personalData.debtPaymentPlan === '5-year') {
+        const monthsIn5Years = 5 * 12;
+        const monthlyPayment = monthlyRate > 0 
+          ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn5Years)) / (Math.pow(1 + monthlyRate, monthsIn5Years) - 1)
+          : currentDebtAmount / monthsIn5Years;
+        annualDebtPayment = monthlyPayment * 12;
+      } else if (personalData.debtPaymentPlan === 'custom') {
+        annualDebtPayment = (personalData.customDebtPayment || 0) * 12;
+      }
+      
+      // Apply debt payment to reduce debt amount
+      newDebtAmount = Math.max(0, newDebtAmount - annualDebtPayment);
+    }
+    
     // Calculate after-tax investment contributions that reduce cash savings
     const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
     const annualIraContributions = personalData.iraTraditionalContribution + personalData.iraRothContribution;
     const afterTaxInvestmentContributions = annualMonthlyInvestments + annualIraContributions;
     
-    // Annual cash flow = after-tax income - expenses - after-tax investment contributions
-    const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses - afterTaxInvestmentContributions;
+    // Annual cash flow = after-tax income - expenses - after-tax investment contributions - debt payments
+    const annualCashFlow = taxInfo.afterTaxIncome - updatedAnnualExpenses - afterTaxInvestmentContributions - annualDebtPayment;
     
     // Handle bank account system: salary goes to savings account by default
     // Apply interest to accounts: HYSA gets 4%, Savings gets 0.05%, Checking gets 0%
@@ -358,13 +397,13 @@ export const LifeSimulator: React.FC = () => {
     const savingsInterest = currentSavingsAccount * 0.0005; // 0.05% APY
     const hysaInterest = currentHysaAccount * 0.04; // 4% APY
     
-    // Add salary (cash flow) to savings account by default
+    // Add salary (cash flow) to savings account by default - allow negative balances
     const newSavingsAccount = currentSavingsAccount + annualCashFlow + savingsInterest;
     const newCheckingAccount = currentCheckingAccount; // No interest
     const newHysaAccount = currentHysaAccount + hysaInterest;
     
-    // Calculate total bank balance for ref tracking and net worth
-    const newTotalBankBalance = Math.max(0, newSavingsAccount) + Math.max(0, newCheckingAccount) + Math.max(0, newHysaAccount);
+    // Calculate total bank balance for ref tracking and net worth (can be negative)
+    const newTotalBankBalance = newSavingsAccount + newCheckingAccount + newHysaAccount;
     
     // Update the ref with the new total bank balance for next iteration
     currentSavingsRef.current = newTotalBankBalance;
@@ -373,9 +412,9 @@ export const LifeSimulator: React.FC = () => {
     setPersonalData(prev => ({
       ...prev,
       savings: 0, // Clear legacy field to prevent double counting
-      savingsAccount: Math.max(0, newSavingsAccount),
-      checkingAccount: Math.max(0, newCheckingAccount),
-      hysaAccount: Math.max(0, newHysaAccount)
+      savingsAccount: newSavingsAccount,
+      checkingAccount: newCheckingAccount,
+      hysaAccount: newHysaAccount
     }));
 
     // Calculate investment growth AFTER savings calculation
@@ -403,12 +442,20 @@ export const LifeSimulator: React.FC = () => {
     // Update the ref with the new tech stock value for next iteration
     currentTechStockValueRef.current = newTechStockValue;
 
+    // Update personalData with new debt amount if there is debt
+    if (currentDebtAmount > 0) {
+      setPersonalData(prev => ({
+        ...prev,
+        debtAmount: newDebtAmount
+      }));
+    }
+
     // Calculate net worth: Total Assets - Total Liabilities (same as NetWorthPage)
     // Use the NEW calculated values (not the stale personalData values) for accurate calculation
     const assets = {
-      savings: Math.max(0, newSavingsAccount),
-      checking: Math.max(0, newCheckingAccount),
-      hysa: Math.max(0, newHysaAccount),
+      savings: newSavingsAccount,
+      checking: newCheckingAccount,
+      hysa: newHysaAccount,
       legacy: 0, // Clear legacy to prevent double counting
       investments: newInvestmentValue, // Use the comprehensive calculation for all accounts
       techStock: newTechStockValue, // Include tech stock as separate asset
@@ -417,7 +464,7 @@ export const LifeSimulator: React.FC = () => {
     };
 
     const liabilities = {
-      debt: personalData.debtAmount || 0,
+      debt: newDebtAmount, // Use the updated debt amount with interest
       creditCards: 0, // Future enhancement
       loans: 0, // Future enhancement
       other: 0
@@ -449,7 +496,8 @@ export const LifeSimulator: React.FC = () => {
         netWorth: calculatedNetWorth,
         salary: personalData.currentSalary,
         investments: totalInvestmentValueIncludingTechStock,
-        debt: personalData.debtAmount,
+        debt: newDebtAmount, // Use the updated debt amount with interest
+        debtPayment: annualDebtPayment, // Track annual debt payments
         timestamp: new Date(),
         inflation: newEconomicState.currentInflationRate,
         stockMarketValue: newEconomicState.stockMarketIndex
@@ -464,10 +512,17 @@ export const LifeSimulator: React.FC = () => {
         afterTaxInvestments: afterTaxInvestmentContributions,
         monthlyInvestments: annualMonthlyInvestments,
         iraContributions: annualIraContributions,
+        debtPayments: annualDebtPayment,
+        debtPaymentPlan: personalData.debtPaymentPlan,
+        currentDebt: currentDebtAmount,
+        newDebt: newDebtAmount,
         netCashFlow: annualCashFlow,
         previousBankBalance: currentSavingsRef.current - newTotalBankBalance + annualCashFlow, // Calculate previous from current
         newBankBalance: newTotalBankBalance,
-        bankBalanceChange: annualCashFlow + savingsInterest + hysaInterest
+        bankBalanceChange: newTotalBankBalance - (currentSavingsRef.current - newTotalBankBalance + annualCashFlow),
+        savingsAccount: newSavingsAccount,
+        checkingAccount: newCheckingAccount,
+        hysaAccount: newHysaAccount
       });
 
       // Debug logging for key financial values
@@ -512,8 +567,8 @@ export const LifeSimulator: React.FC = () => {
         breakdown: {
           totalBankBalance: newTotalBankBalance,
           investments: newInvestmentValue,
-          debt: personalData.debtAmount,
-          calculation: `${newTotalBankBalance} + ${newInvestmentValue} - ${personalData.debtAmount} = ${calculatedNetWorth}`
+          debt: newDebtAmount, // Use updated debt amount
+          calculation: `${newTotalBankBalance} + ${newInvestmentValue} - ${newDebtAmount} = ${calculatedNetWorth}`
         }
       });
       
@@ -527,7 +582,8 @@ export const LifeSimulator: React.FC = () => {
       netWorth: 0,
       salary: personalData.currentSalary,
       investments: 0,
-      debt: personalData.debtAmount,
+      debt: newDebtAmount, // Use updated debt amount
+      debtPayment: 0, // No previous payment data
       timestamp: new Date(simulationProgress.startDate),
       inflation: 0,
       stockMarketValue: 5000
@@ -538,7 +594,8 @@ export const LifeSimulator: React.FC = () => {
       netWorth: calculatedNetWorth,
       salary: personalData.currentSalary,
       investments: newInvestmentValue,
-      debt: personalData.debtAmount,
+      debt: newDebtAmount, // Use updated debt amount
+      debtPayment: annualDebtPayment, // Current year debt payment
       timestamp: new Date(),
       inflation: newEconomicState.currentInflationRate,
       stockMarketValue: newEconomicState.stockMarketIndex
@@ -661,6 +718,7 @@ export const LifeSimulator: React.FC = () => {
         salary: personalData.currentSalary,
         investments: initialTotalInvestments,
         debt: personalData.debtAmount,
+        debtPayment: 0, // No payment at start
         timestamp: new Date(),
         inflation: economicState.currentInflationRate,
         stockMarketValue: economicState.stockMarketIndex
@@ -973,6 +1031,8 @@ export const LifeSimulator: React.FC = () => {
         techStockHoldings: 15000, // Tech worker with stock options
         debtAmount: 25000,
         debtInterestRate: 4.5,
+        debtPaymentPlan: 'none' as const,
+        customDebtPayment: 0,
         retirementAge: 65,
         retirementGoal: 1500000,
         monthlyInvestment: 800
@@ -1003,6 +1063,8 @@ export const LifeSimulator: React.FC = () => {
         techStockHoldings: 8000, // Government worker with some tech stock investments
         debtAmount: 15000,
         debtInterestRate: 3.2,
+        debtPaymentPlan: 'none' as const,
+        customDebtPayment: 0,
         retirementAge: 62,
         retirementGoal: 1200000,
         monthlyInvestment: 1200
@@ -1038,6 +1100,8 @@ export const LifeSimulator: React.FC = () => {
         techStockHoldings: 1500, // Service worker with small tech stock investment
         debtAmount: 35000,
         debtInterestRate: 6.8,
+        debtPaymentPlan: 'none' as const,
+        customDebtPayment: 0,
         retirementAge: 67,
         retirementGoal: 800000,
         monthlyInvestment: 300
@@ -1103,6 +1167,11 @@ export const LifeSimulator: React.FC = () => {
       ...prev,
       [personalData.state]: newRentValue
     }));
+    // Also update personalData to ensure cash flow calculations use the new value
+    setPersonalData(prev => ({
+      ...prev,
+      monthlyRent: newRentValue
+    }));
     setEditingRent(false);
     setTempRentValue('');
   };
@@ -1119,6 +1188,11 @@ export const LifeSimulator: React.FC = () => {
       delete newData[personalData.state];
       return newData;
     });
+    // Also clear personalData to fall back to state default
+    setPersonalData(prev => ({
+      ...prev,
+      monthlyRent: undefined
+    }));
   };
 
   const isCustomRent = (state: string): boolean => {
@@ -1155,6 +1229,11 @@ export const LifeSimulator: React.FC = () => {
       ...prev,
       [personalData.state]: newGroceryValue
     }));
+    // Also update personalData to ensure cash flow calculations use the new value
+    setPersonalData(prev => ({
+      ...prev,
+      weeklyGroceries: newGroceryValue
+    }));
     setEditingGrocery(false);
     setTempGroceryValue('');
   };
@@ -1171,6 +1250,11 @@ export const LifeSimulator: React.FC = () => {
       delete newData[personalData.state];
       return newData;
     });
+    // Also clear personalData to fall back to state default
+    setPersonalData(prev => ({
+      ...prev,
+      weeklyGroceries: undefined
+    }));
   };
 
   const isCustomGrocery = (state: string): boolean => {
@@ -1179,11 +1263,15 @@ export const LifeSimulator: React.FC = () => {
 
   // Calculate total annual expenses
   const calculateAnnualExpenses = (): number => {
-    // Use the same logic as expenses page - getCurrentRent and getCurrentGrocery already handle custom values
-    const monthlyRent = personalData.state ? getCurrentRent(personalData.state) : 0;
+    // Prioritize personalData values if set, otherwise use state-based system
+    const monthlyRent = personalData.monthlyRent !== undefined 
+      ? personalData.monthlyRent 
+      : (personalData.state ? getCurrentRent(personalData.state) : 0);
     const annualRent = monthlyRent * 12;
     
-    const weeklyGroceries = personalData.state ? getCurrentGrocery(personalData.state) : 0;
+    const weeklyGroceries = personalData.weeklyGroceries !== undefined 
+      ? personalData.weeklyGroceries 
+      : (personalData.state ? getCurrentGrocery(personalData.state) : 0);
     const annualGrocery = weeklyGroceries * 52; // Weekly to annual
     
     return annualRent + annualGrocery;
@@ -1338,7 +1426,7 @@ export const LifeSimulator: React.FC = () => {
       netWorth: netWorth,
       investmentAccountValue: totalInvestmentValue // Use same calculation as net worth
     }));
-  }, [personalData.currentSalary, personalData.state, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount, personalData.techStockHoldings, personalData.iraTraditionalHoldings, personalData.iraRothHoldings, personalData.personalInvestmentCash, personalData.iraTraditionalCash, personalData.iraRothCash, personalData.the401kTraditionalCash, personalData.the401kRothCash, personalData.iraTraditionalTechHoldings, personalData.iraRothTechHoldings, personalData.the401kTraditionalHoldings, personalData.the401kTraditionalTechHoldings, personalData.the401kRothHoldings, personalData.the401kRothTechHoldings]);
+  }, [personalData.currentSalary, personalData.state, personalData.monthlyRent, personalData.weeklyGroceries, userRentData, userGroceryData, inflationAdjustedRentData, inflationAdjustedGroceryData, hasStarted, personalData.savings, personalData.investments, personalData.debtAmount, personalData.techStockHoldings, personalData.iraTraditionalHoldings, personalData.iraRothHoldings, personalData.personalInvestmentCash, personalData.iraTraditionalCash, personalData.iraRothCash, personalData.the401kTraditionalCash, personalData.the401kRothCash, personalData.iraTraditionalTechHoldings, personalData.iraRothTechHoldings, personalData.the401kTraditionalHoldings, personalData.the401kTraditionalTechHoldings, personalData.the401kRothHoldings, personalData.the401kRothTechHoldings]);
 
   const renderExpensesPage = () => {
     const currentStateRent = personalData.state ? getCurrentRent(personalData.state) : 0;
@@ -2754,6 +2842,26 @@ export const LifeSimulator: React.FC = () => {
       case 'bank':
         return (
           <BankAccountPage
+            personalData={personalData}
+            setPersonalData={setPersonalData}
+            setCurrentMode={setCurrentMode}
+            currentAnnualExpenses={calculateAnnualExpenses()}
+            taxInfo={calculateTaxes(financials.currentSalary, personalData.state, 
+              personalData.currentSalary * personalData.contributions401kTraditional / 100,
+              personalData.currentSalary * personalData.contributions401kRoth / 100)}
+            hasStarted={hasStarted}
+            simulationState={simulationState}
+            simulationProgress={simulationProgress}
+            historicalData={historicalData}
+            onStart={startSimulation}
+            onPause={pauseSimulation}
+            onReset={resetSimulation}
+            onEditProfile={handleEditProfile}
+          />
+        );
+      case 'debt':
+        return (
+          <DebtPage
             personalData={personalData}
             setPersonalData={setPersonalData}
             setCurrentMode={setCurrentMode}

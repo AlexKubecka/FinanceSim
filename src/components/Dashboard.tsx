@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3, PiggyBank, FileText } from 'lucide-react';
+import { User, TrendingUp, DollarSign, Receipt, Globe, BarChart3, PiggyBank, FileText, CreditCard, TrendingDown } from 'lucide-react';
 import { 
   PersonalFinancialData, 
   SimulationProgress, 
@@ -13,7 +13,7 @@ import { ProgressTimeline } from './ProgressTimeline';
 import { LifeProgressBar } from './LifeProgressBar';
 import { calculateTotalPortfolioValue } from '../utils/financialCalculations';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'debt' | 'reports';
 
 interface TaxInfo {
   totalTax: number;
@@ -82,6 +82,50 @@ export const Dashboard: React.FC<DashboardProps> = ({
   resetSimulation,
   handleEditProfile
 }) => {
+  // Calculate annual debt payment for accurate cash flow display
+  const calculateAnnualDebtPayment = () => {
+    const currentDebtAmount = personalData.debtAmount || 0;
+    const debtInterestRate = personalData.debtInterestRate || 0;
+    
+    if (currentDebtAmount <= 0 || personalData.debtPaymentPlan === 'none') {
+      return 0;
+    }
+    
+    const monthlyRate = debtInterestRate / 100 / 12;
+    
+    if (personalData.debtPaymentPlan === '30-year') {
+      const monthsIn30Years = 30 * 12;
+      const monthlyPayment = monthlyRate > 0 
+        ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn30Years)) / (Math.pow(1 + monthlyRate, monthsIn30Years) - 1)
+        : currentDebtAmount / monthsIn30Years;
+      return monthlyPayment * 12;
+    } else if (personalData.debtPaymentPlan === '15-year') {
+      const monthsIn15Years = 15 * 12;
+      const monthlyPayment = monthlyRate > 0 
+        ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn15Years)) / (Math.pow(1 + monthlyRate, monthsIn15Years) - 1)
+        : currentDebtAmount / monthsIn15Years;
+      return monthlyPayment * 12;
+    } else if (personalData.debtPaymentPlan === '5-year') {
+      const monthsIn5Years = 5 * 12;
+      const monthlyPayment = monthlyRate > 0 
+        ? (currentDebtAmount * monthlyRate * Math.pow(1 + monthlyRate, monthsIn5Years)) / (Math.pow(1 + monthlyRate, monthsIn5Years) - 1)
+        : currentDebtAmount / monthsIn5Years;
+      return monthlyPayment * 12;
+    } else if (personalData.debtPaymentPlan === 'custom') {
+      return (personalData.customDebtPayment || 0) * 12;
+    }
+    
+    return 0;
+  };
+
+  const annualDebtPayment = calculateAnnualDebtPayment();
+  
+  // Calculate investment contributions (same as in simulator)
+  const annualMonthlyInvestments = personalData.monthlyInvestment * 12;
+  const annualIraContributions = personalData.iraTraditionalContribution + personalData.iraRothContribution;
+  const afterTaxInvestmentContributions = annualMonthlyInvestments + annualIraContributions;
+  
+  const actualMonthlySurplus = (taxInfo.afterTaxIncome - currentAnnualExpenses - annualDebtPayment - afterTaxInvestmentContributions) / 12;
   return (
     <div className="space-y-8">
       {/* Persistent Simulation Controls */}
@@ -352,6 +396,67 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
+        {/* Debt Card */}
+        <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
+             onClick={() => setCurrentMode('debt')}>
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
+              <CreditCard className="h-6 w-6 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Total Debt</h3>
+              <p className="text-sm text-gray-600">
+                {personalData.debtAmount > 0 
+                  ? `${personalData.debtInterestRate?.toFixed(1)}% avg interest` 
+                  : 'No debt recorded'
+                }
+              </p>
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-red-600 mb-2">
+            ${(personalData.debtAmount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </div>
+          
+          {/* Debt metrics */}
+          {personalData.debtAmount > 0 ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Monthly Interest:</span>
+                <span className="font-medium text-red-600">
+                  ${((personalData.debtAmount * (personalData.debtInterestRate || 0) / 100) / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Debt-to-Income:</span>
+                <span className={`font-medium ${
+                  personalData.currentSalary > 0 
+                    ? ((personalData.debtAmount / personalData.currentSalary) * 100) > 40 
+                      ? 'text-red-600' 
+                      : ((personalData.debtAmount / personalData.currentSalary) * 100) > 20 
+                        ? 'text-yellow-600' 
+                        : 'text-green-600'
+                    : 'text-gray-600'
+                }`}>
+                  {personalData.currentSalary > 0 
+                    ? `${((personalData.debtAmount / personalData.currentSalary) * 100).toFixed(1)}%`
+                    : 'N/A'
+                  }
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Click to add debt tracking</p>
+          )}
+          
+          {/* Mini Chart Placeholder */}
+          <div className="mt-4 h-16 bg-red-50 rounded flex items-center justify-center">
+            <TrendingDown className="h-6 w-6 text-red-400" />
+            <span className="ml-2 text-sm text-red-600">
+              {personalData.debtAmount > 0 ? 'Payoff progress' : 'Debt tracking'}
+            </span>
+          </div>
+        </div>
+
         {/* Economic Dashboard Card */}
         <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer transform hover:-translate-y-1"
              onClick={() => setCurrentMode('economy')}>
@@ -528,9 +633,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {/* Savings Rate */}
           <div className="mb-3">
             <p className="text-sm text-gray-600">Monthly Surplus</p>
-            <p className={`text-lg font-bold ${((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${(((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            <p className={`text-lg font-bold ${actualMonthlySurplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${actualMonthlySurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
+            <div className="text-xs text-gray-500 mt-1 space-y-1">
+              {annualDebtPayment > 0 && (
+                <p>After ${(annualDebtPayment / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}/mo debt payment</p>
+              )}
+              {afterTaxInvestmentContributions > 0 && (
+                <p>After ${(afterTaxInvestmentContributions / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}/mo investments</p>
+              )}
+              {(annualDebtPayment > 0 || afterTaxInvestmentContributions > 0) && (
+                <p className="font-medium">= Available for savings</p>
+              )}
+            </div>
           </div>
           
           <p className="text-sm text-gray-500 mb-3">Liquid assets & emergency fund</p>
@@ -626,9 +742,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Monthly Surplus</p>
-            <p className={`text-2xl font-bold ${((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12) >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-              ${(((taxInfo.afterTaxIncome - currentAnnualExpenses) / 12)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            <p className={`text-2xl font-bold ${actualMonthlySurplus >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+              ${actualMonthlySurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
+            <div className="text-xs text-gray-500 mt-1">
+              {(annualDebtPayment > 0 || afterTaxInvestmentContributions > 0) && (
+                <p>Available for savings</p>
+              )}
+            </div>
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Economic Cycle</p>
@@ -640,6 +761,163 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Cash Flow Breakdown */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">💰 Monthly Cash Flow Breakdown</h2>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+            <span className="font-medium text-green-800">Take-Home Pay</span>
+            <span className="font-bold text-green-800">+${(taxInfo.afterTaxIncome / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+          </div>
+          
+          <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+            <span className="font-medium text-red-800">Living Expenses</span>
+            <span className="font-bold text-red-800">-${(currentAnnualExpenses / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+          </div>
+          
+          {afterTaxInvestmentContributions > 0 && (
+            <div className="space-y-2">
+              {annualMonthlyInvestments > 0 && (
+                <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between flex-1">
+                    <span className="font-medium text-blue-800">Monthly Investments</span>
+                    <button
+                      onClick={() => setCurrentMode('investments')}
+                      className="text-xs px-2 py-1 bg-blue-200 text-blue-800 rounded hover:bg-blue-300 transition-colors"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <span className="font-bold text-blue-800 ml-3">-${(annualMonthlyInvestments / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                </div>
+              )}
+              
+              {annualIraContributions > 0 && (
+                <div className="flex justify-between items-center p-3 bg-indigo-50 rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-indigo-800">IRA Contributions</span>
+                      <button
+                        onClick={() => setCurrentMode('investments')}
+                        className="text-xs px-2 py-1 bg-indigo-200 text-indigo-800 rounded hover:bg-indigo-300 transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <div className="text-xs text-indigo-600 mt-1">
+                      {personalData.iraTraditionalContribution > 0 && (
+                        <span>Traditional: ${personalData.iraTraditionalContribution.toLocaleString('en-US', { maximumFractionDigits: 0 })}/yr</span>
+                      )}
+                      {personalData.iraTraditionalContribution > 0 && personalData.iraRothContribution > 0 && <span> • </span>}
+                      {personalData.iraRothContribution > 0 && (
+                        <span>Roth: ${personalData.iraRothContribution.toLocaleString('en-US', { maximumFractionDigits: 0 })}/yr</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="font-bold text-indigo-800 ml-3">-${(annualIraContributions / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Encourage IRA contributions if none are set */}
+          {annualIraContributions === 0 && (
+            <div className="flex justify-between items-center p-3 bg-yellow-50 border-2 border-dashed border-yellow-300 rounded-lg">
+              <div className="flex items-center justify-between flex-1">
+                <div>
+                  <span className="font-medium text-yellow-800">💡 Consider IRA Contributions</span>
+                  <p className="text-xs text-yellow-600 mt-1">Tax-advantaged retirement savings up to $7,000/yr</p>
+                </div>
+                <button
+                  onClick={() => setCurrentMode('investments')}
+                  className="text-xs px-3 py-1 bg-yellow-200 text-yellow-800 rounded hover:bg-yellow-300 transition-colors"
+                >
+                  Set Up
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {annualDebtPayment > 0 && (
+            <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
+              <span className="font-medium text-orange-800">Debt Payments</span>
+              <span className="font-bold text-orange-800">-${(annualDebtPayment / 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+            </div>
+          )}
+          
+          <div className="border-t-2 border-gray-200 pt-3">
+            <div className={`flex justify-between items-center p-3 rounded-lg ${actualMonthlySurplus >= 0 ? 'bg-purple-50' : 'bg-red-50'}`}>
+              <span className={`font-bold ${actualMonthlySurplus >= 0 ? 'text-purple-800' : 'text-red-800'}`}>Available for Savings</span>
+              <span className={`font-bold text-lg ${actualMonthlySurplus >= 0 ? 'text-purple-800' : 'text-red-800'}`}>
+                ${actualMonthlySurplus >= 0 ? '+' : ''}${actualMonthlySurplus.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </span>
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">
+              <strong>Annual Savings Projection:</strong> ${(actualMonthlySurplus * 12).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              {actualMonthlySurplus > 0 && (
+                <span className="text-green-600 ml-2">✅ This should match your year-end cash savings!</span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Financial Crisis Warning */}
+      {actualMonthlySurplus < 0 && (
+        <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-6 mb-6">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 18.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="ml-4 flex-1">
+              <h3 className="text-lg font-semibold text-red-800 mb-2">
+                ⚠️ Critical Financial Situation
+              </h3>
+              <p className="text-red-700 mb-4">
+                Your expenses {(annualDebtPayment > 0 || afterTaxInvestmentContributions > 0) ? '(including debt payments and investments) ' : ''}exceed your take-home pay by <strong>${Math.abs(actualMonthlySurplus).toLocaleString('en-US', { maximumFractionDigits: 0 })}</strong> per month. 
+                This will quickly drain your savings and lead to debt.
+              </p>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg p-4">
+                  <h4 className="font-semibold text-red-800 mb-2">📉 Immediate Actions</h4>
+                  <ul className="text-sm text-red-700 space-y-1">
+                    <li>• Review and cut non-essential expenses</li>
+                    <li>• Cancel subscriptions you don't use</li>
+                    <li>• Find ways to reduce housing costs</li>
+                    <li>• Cook at home instead of dining out</li>
+                    <li>• Use public transportation if possible</li>
+                  </ul>
+                </div>
+                
+                <div className="bg-white rounded-lg p-4">
+                  <h4 className="font-semibold text-red-800 mb-2">📈 Income Solutions</h4>
+                  <ul className="text-sm text-red-700 space-y-1">
+                    <li>• Ask for a raise or promotion</li>
+                    <li>• Look for higher-paying job opportunities</li>
+                    <li>• Consider part-time or freelance work</li>
+                    <li>• Sell items you no longer need</li>
+                    <li>• Explore gig economy options</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Pro Tip:</strong> Try the 50/30/20 budget rule: 50% needs, 30% wants, 20% savings. 
+                  Your current expenses {(annualDebtPayment > 0 || afterTaxInvestmentContributions > 0) ? '(including debt payments and investments) ' : ''}represent {(((currentAnnualExpenses + annualDebtPayment + afterTaxInvestmentContributions) / taxInfo.afterTaxIncome) * 100).toFixed(0)}% of your income.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

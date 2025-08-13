@@ -5,7 +5,7 @@ import { calculateYearOverYearChanges } from '../utils/yearlySummaryGenerator';
 import { SimulationControls } from './SimulationControls';
 import { PersonalFinancialData, SimulationProgress } from '../types/simulation';
 
-type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'reports';
+type SimulationMode = 'selection' | 'personal' | 'realistic' | 'custom' | 'salary' | 'expenses' | 'investments' | 'economy' | 'networth' | 'bank' | 'debt' | 'reports';
 
 interface YearEndReportsPageProps {
   // Core data
